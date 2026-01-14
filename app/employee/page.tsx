@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    QrCode, Clock, Coffee, LogOut,
-    Timer as TimerIcon, AlertCircle, CheckCircle2,
-    Loader2, Camera, X, DollarSign, Briefcase, User
+    Clock, Coffee,
+    Timer as TimerIcon, CheckCircle2,
+    Loader2, Camera, DollarSign, Briefcase, User
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, PrimaryButton } from '@/components/SharedUI';
-import { Html5Qrcode } from 'html5-qrcode';
+import QRScanner from '@/components/QRScanner';
 import { toast } from 'react-toastify';
 
 const EmployeeDashboard: React.FC = () => {
@@ -18,9 +18,7 @@ const EmployeeDashboard: React.FC = () => {
     const [currentTime, setCurrentTime] = useState(new Date());
     const [timer, setTimer] = useState("00:00:00");
     const [showScanner, setShowScanner] = useState(false);
-    const [isCameraLoading, setIsCameraLoading] = useState(false);
     const [dressing, setDressing] = useState<'casual' | 'formal'>('formal');
-    const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
     // Real-time Clock
     useEffect(() => {
@@ -35,10 +33,12 @@ const EmployeeDashboard: React.FC = () => {
             const res = await fetch('/api/attendance');
             const data = await res.json();
             if (res.ok) {
-                // Find today's record in history or use a specific endpoint if we had one
-                // For now, let's assume /api/attendance returns history and we find today
-                const todayStr = new Date().toLocaleDateString('en-CA');
-                const todayRecord = data.find((r: any) => r.date.startsWith(todayStr));
+                const todayKey = new Date().toISOString().slice(0, 10);
+                // Filter out records that are already checked out to show QR scanner again
+                const todayRecord = data.find((r: any) => {
+                    const d = new Date(r.date);
+                    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === todayKey && !r.checkOut;
+                });
                 setAttendance(todayRecord);
             }
         } catch (err) {
@@ -55,9 +55,9 @@ const EmployeeDashboard: React.FC = () => {
     // Timer Logic
     useEffect(() => {
         let interval: any;
-        if (attendance?.check_in && !attendance?.check_out) {
+        if (attendance?.checkIn && !attendance?.checkOut) {
             const today = new Date().toISOString().split('T')[0];
-            const startTime = new Date(`${today}T${attendance.check_in}`);
+            const startTime = new Date(attendance.checkIn);
 
             interval = setInterval(() => {
                 const diff = new Date().getTime() - startTime.getTime();
@@ -76,45 +76,18 @@ const EmployeeDashboard: React.FC = () => {
         return () => clearInterval(interval);
     }, [attendance]);
 
-    const handleOpenScanner = async () => {
+    const handleOpenScanner = () => {
         setShowScanner(true);
-        setIsCameraLoading(true);
-
-        setTimeout(async () => {
-            try {
-                const html5QrCode = new Html5Qrcode("reader");
-                qrScannerRef.current = html5QrCode;
-                await html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 15, qrbox: { width: 250, height: 250 } },
-                    onScanSuccess,
-                    () => { }
-                );
-                setIsCameraLoading(false);
-            } catch (err: any) {
-                toast.error("Camera Access Error");
-                setShowScanner(false);
-                setIsCameraLoading(false);
-            }
-        }, 500);
-    };
-
-    const stopCamera = async () => {
-        if (qrScannerRef.current) {
-            try {
-                if (qrScannerRef.current.isScanning) {
-                    await qrScannerRef.current.stop();
-                }
-                qrScannerRef.current = null;
-            } catch (err) { }
-        }
     };
 
     async function onScanSuccess(decodedText: string) {
         toast.success("QR Validated!");
         setShowScanner(false);
-        stopCamera();
-        markAttendance();
+        if (decodedText.includes('OFFICE_CHECKIN')) {
+            markAttendance();
+        } else {
+            markAttendance();
+        }
     }
 
     const formatTime = (timeStr: any) => {
@@ -138,6 +111,7 @@ const EmployeeDashboard: React.FC = () => {
 
     const markAttendance = async () => {
         try {
+            setLoading(true);
             const res = await fetch('/api/attendance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -146,28 +120,39 @@ const EmployeeDashboard: React.FC = () => {
             const data = await res.json();
             if (res.ok) {
                 toast.success("Attendance Logged");
-                fetchTodayAttendance();
+                setAttendance(data);
             } else {
                 toast.error(data.error || "Failed to log attendance");
             }
         } catch (err) {
             toast.error("Process Error");
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleClockOut = async () => {
         try {
+            setLoading(true);
             const res = await fetch('/api/attendance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'check-out' })
+                body: JSON.stringify({ action: 'checkout' })
             });
+            const data = await res.json();
             if (res.ok) {
                 toast.success("Shift Terminated");
+                setAttendance(data);
+            } else if (res.status === 400 && data.error === 'Already checked out today') {
+                toast.info("Already checked out, refreshing...");
                 fetchTodayAttendance();
+            } else {
+                toast.error(data.error || "Failed to terminate shift");
             }
         } catch (err) {
             toast.error("Process Error");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -244,21 +229,22 @@ const EmployeeDashboard: React.FC = () => {
                             </div>
                             <div className="space-y-2">
                                 <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight">Shift Active</h3>
-                                <p className={`text-[11px] font-black uppercase tracking-widest ${attendance.is_late ? 'text-amber-500' : 'text-emerald-500'}`}>
-                                    {attendance.is_late ? 'LATE ENTRY LOGGED' : 'OPTIMAL ENTRY LOGGED'}
+                                <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight">Shift Active</h3>
+                                <p className={`text-[11px] font-black uppercase tracking-widest ${attendance.status === 'late' ? 'text-amber-500' : 'text-emerald-500'}`}>
+                                    {attendance.status === 'late' ? 'LATE ENTRY LOGGED' : 'OPTIMAL ENTRY LOGGED'}
                                 </p>
-                                <p className="text-[10px] font-black text-zinc-400">AT {formatTime(attendance.check_in)}</p>
+                                <p className="text-[10px] font-black text-zinc-400">AT {formatTime(attendance.checkIn)}</p>
                             </div>
                             <div className="w-full p-8 bg-zinc-50 rounded-[3rem] border border-zinc-100">
                                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 mb-3">Time in Shift</p>
                                 <p className="text-5xl sm:text-6xl font-black tracking-tighter text-black tabular-nums">{timer}</p>
                             </div>
-                            {!attendance.check_out ? (
+                            {!attendance.checkOut ? (
                                 <PrimaryButton onClick={handleClockOut} className="w-full !bg-rose-600 hover:!bg-rose-700 shadow-rose-100 py-5">
                                     TERMINATE SHIFT
                                 </PrimaryButton>
                             ) : (
-                                <div className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Ended at {formatTime(attendance.check_out)}</div>
+                                <div className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Ended at {formatTime(attendance.checkOut)}</div>
                             )}
                         </>
                     )}
@@ -287,20 +273,10 @@ const EmployeeDashboard: React.FC = () => {
             </div>
 
             {showScanner && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setShowScanner(false)}></div>
-                    <div className="relative bg-white w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl">
-                        <div className="p-8 border-b border-zinc-100 flex items-center justify-between">
-                            <h3 className="text-xl font-black uppercase">Terminal Scanner</h3>
-                            <button onClick={() => setShowScanner(false)} className="p-3 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-all">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="p-8 bg-zinc-900 min-h-[300px] flex flex-col items-center justify-center relative">
-                            <div id="reader" className="w-full h-full max-w-sm rounded-2xl overflow-hidden border-2 border-white/20"></div>
-                        </div>
-                    </div>
-                </div>
+                <QRScanner
+                    onScanSuccess={onScanSuccess}
+                    onClose={() => setShowScanner(false)}
+                />
             )}
         </div>
     );

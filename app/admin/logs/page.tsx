@@ -12,6 +12,7 @@ const Logs: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [dateFilter, setDateFilter] = useState<'all' | 'today'>('today'); // Default to today
 
     const fetchData = async () => {
         setLoading(true);
@@ -35,6 +36,9 @@ const Logs: React.FC = () => {
 
     useEffect(() => {
         fetchData();
+        // Auto-refresh every 30 seconds for real-time updates
+        const interval = setInterval(fetchData, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     const months = [
@@ -61,9 +65,18 @@ const Logs: React.FC = () => {
         return timeStr;
     };
 
-    // Filter logs for selected month/year
+    // Filter logs for selected month/year OR today
     const monthlyLogs = logs.filter(log => {
         const logDate = new Date(log.date);
+        if (dateFilter === 'today') {
+            const today = new Date();
+            // Compare purely by local date string - strict equality might fail if timezones differ slightly
+            // Let's use looser check or standard day comparison
+            // Also check if checkIn exits
+            return logDate.getDate() === today.getDate() &&
+                logDate.getMonth() === today.getMonth() &&
+                logDate.getFullYear() === today.getFullYear();
+        }
         return logDate.getMonth() === selectedMonth && logDate.getFullYear() === selectedYear;
     });
 
@@ -73,7 +86,10 @@ const Logs: React.FC = () => {
         const present = userLogs.filter(l => l.status === 'present').length;
         const late = userLogs.filter(l => l.status === 'late').length;
         const leave = userLogs.filter(l => l.status === 'leave').length;
-        const absent = 26 - (present + late + leave); // Assuming 26 work days
+        // Absent logic: For 'today', if no log found, they are absent.
+        const absent = dateFilter === 'today' ? (userLogs.length === 0 ? 1 : 0) : (26 - (present + late + leave));
+
+        const todayLog = dateFilter === 'today' ? userLogs[0] : null;
 
         return {
             ...user,
@@ -81,16 +97,35 @@ const Logs: React.FC = () => {
             late,
             leave,
             absent: absent > 0 ? absent : 0,
-            logs: userLogs
+            logs: userLogs,
+            todayLog
         };
-    }).filter(u => u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()));
+    }).filter(u => {
+        const matchesSearch = u.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    if (loading) {
+        // NEW REQUIREMENT: In 'today' view, ONLY show users who have a log (scanned).
+        if (dateFilter === 'today') {
+            return matchesSearch && u.logs.length > 0;
+        }
+
+        return matchesSearch;
+    });
+
+    // Sort: For today, show those with activity (logs) first
+    if (dateFilter === 'today') {
+        userSummary.sort((a, b) => {
+            const aHasLog = a.logs.length > 0 ? 1 : 0;
+            const bHasLog = b.logs.length > 0 ? 1 : 0;
+            return bHasLog - aHasLog;
+        });
+    }
+
+    if (loading && logs.length === 0) { // Only show full loader if no data yet (background refresh shouldn't hide UI)
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="flex flex-col items-center gap-4">
                     <Loader2 className="animate-spin text-black" size={48} />
-                    <p className="text-zinc-400 font-black uppercase text-[10px] tracking-[0.4em]">Aggregating Monthly Intelligence...</p>
+                    <p className="text-zinc-400 font-black uppercase text-[10px] tracking-[0.4em]">Aggregating Intelligence...</p>
                 </div>
             </div>
         );
@@ -100,21 +135,40 @@ const Logs: React.FC = () => {
         <div className="space-y-8 pb-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-zinc-50/50 p-8 rounded-[3rem] border border-zinc-100">
                 <div>
-                    <h1 className="text-4xl font-black text-black tracking-tighter leading-none mb-2">Monthly Attendance</h1>
-                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em]">Archived Workforce Presence Intelligence</p>
+                    <h1 className="text-4xl font-black text-black tracking-tighter leading-none mb-2">
+                        {dateFilter === 'today' ? "Today's Attendance" : "Monthly Attendance"}
+                    </h1>
+                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em]">Workforce Presence Intelligence</p>
                 </div>
                 <div className="flex flex-wrap gap-4 items-center">
-                    <div className="flex bg-white rounded-2xl border border-zinc-200 p-1">
-                        {months.map((m, i) => (
-                            <button
-                                key={m}
-                                onClick={() => setSelectedMonth(i)}
-                                className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${selectedMonth === i ? 'bg-black text-white' : 'text-zinc-400 hover:text-black'}`}
-                            >
-                                {m}
-                            </button>
-                        ))}
+                    <div className="bg-white rounded-2xl border border-zinc-200 p-1 flex">
+                        <button
+                            onClick={() => setDateFilter('today')}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${dateFilter === 'today' ? 'bg-black text-white' : 'text-zinc-400 hover:text-black'}`}
+                        >
+                            Today
+                        </button>
+                        <button
+                            onClick={() => setDateFilter('all')}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${dateFilter === 'all' ? 'bg-black text-white' : 'text-zinc-400 hover:text-black'}`}
+                        >
+                            Monthly
+                        </button>
                     </div>
+
+                    {dateFilter === 'all' && (
+                        <div className="flex bg-white rounded-2xl border border-zinc-200 p-1 overflow-x-auto max-w-[300px] md:max-w-none">
+                            {months.map((m, i) => (
+                                <button
+                                    key={m}
+                                    onClick={() => setSelectedMonth(i)}
+                                    className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${selectedMonth === i ? 'bg-black text-white' : 'text-zinc-400 hover:text-black'}`}
+                                >
+                                    {m}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -143,8 +197,12 @@ const Logs: React.FC = () => {
                             <thead className="bg-zinc-50/50">
                                 <tr>
                                     <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Agent</th>
-                                    <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Summary (P|L|A|V)</th>
-                                    <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Protocol Timings</th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">
+                                        {dateFilter === 'today' ? 'Current Status' : 'Summary (P|L|A|V)'}
+                                    </th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">
+                                        {dateFilter === 'today' ? 'Punch In / Out' : 'Protocol Timings'}
+                                    </th>
                                     <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Expected Break</th>
                                     <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Details</th>
                                 </tr>
@@ -164,18 +222,45 @@ const Logs: React.FC = () => {
                                             </div>
                                         </td>
                                         <td className="px-8 py-6 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Badge variant="emerald">{user.present}P</Badge>
-                                                <Badge variant="amber">{user.late}L</Badge>
-                                                <Badge variant="rose">{user.absent}A</Badge>
-                                                <Badge variant="indigo">{user.leave}V</Badge>
-                                            </div>
+                                            {dateFilter === 'today' ? (
+                                                <div className="flex items-center justify-center gap-2">
+                                                    {user.todayLog ? (
+                                                        <Badge variant={user.todayLog.status === 'late' ? 'amber' : 'emerald'}>
+                                                            {user.todayLog.status.toUpperCase()}
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="rose">ABSENT</Badge>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Badge variant="emerald">{user.present}P</Badge>
+                                                    <Badge variant="amber">{user.late}L</Badge>
+                                                    <Badge variant="rose">{user.absent}A</Badge>
+                                                    <Badge variant="indigo">{user.leave}V</Badge>
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-8 py-6 text-center">
-                                            <p className="font-black text-black text-xs uppercase tracking-tighter">
-                                                {formatTime(user.entry_time)} - {formatTime(user.exit_time)}
-                                            </p>
-                                            <p className="text-[8px] text-zinc-400 font-black uppercase tracking-widest">{user.shift}</p>
+                                            {dateFilter === 'today' ? (
+                                                <div className="flex flex-col items-center">
+                                                    {user.todayLog ? (
+                                                        <>
+                                                            <span className="text-xs font-black text-black">IN: {formatTime(user.todayLog.checkIn)}</span>
+                                                            <span className="text-[10px] font-bold text-zinc-400">OUT: {user.todayLog.checkOut ? formatTime(user.todayLog.checkOut) : 'ACTIVE'}</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-[10px] font-black text-zinc-300">-</span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <p className="font-black text-black text-xs uppercase tracking-tighter">
+                                                        {formatTime(user.entry_time)} - {formatTime(user.exit_time)}
+                                                    </p>
+                                                    <p className="text-[8px] text-zinc-400 font-black uppercase tracking-widest">{user.shift}</p>
+                                                </>
+                                            )}
                                         </td>
                                         <td className="px-8 py-6 text-center">
                                             <p className="text-[10px] font-black text-zinc-500 uppercase tabular-nums tracking-widest">

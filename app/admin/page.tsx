@@ -35,13 +35,18 @@ const AdminDashboard: React.FC = () => {
             const attendance = await attendanceRes.json();
 
             const today = new Date();
-            const todayInPK = today.toLocaleDateString('en-CA');
+            // Compare using YYYY-MM-DD to avoid timezone/string-format mismatches
+            const todayKey = today.toISOString().slice(0, 10);
             const currentMonth = today.getMonth();
             const currentYear = today.getFullYear();
 
             const combined = allUsers.map((u: any) => {
-                const userAtt = attendance.filter((a: any) => a.user_id?._id === u._id);
-                const attToday = userAtt.find((a: any) => a.date.startsWith(todayInPK));
+                // Attendance API returns `user` (populated) and `checkIn` / `checkOut`
+                const userAtt = attendance.filter((a: any) => a.user?._id === u._id);
+                const attToday = userAtt.find((a: any) => {
+                    const d = new Date(a.date);
+                    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === todayKey;
+                });
 
                 // Monthly stats
                 const monthlyAtt = userAtt.filter((a: any) => {
@@ -55,9 +60,9 @@ const AdminDashboard: React.FC = () => {
 
                 return {
                     ...u,
-                    check_in_raw: attToday?.check_in,
-                    check_in: attToday?.check_in || '-',
-                    check_out: attToday?.check_out || '-',
+                    check_in_raw: attToday?.checkIn,
+                    check_in: attToday?.checkIn || '-',
+                    check_out: attToday?.checkOut || '-',
                     dressing: attToday?.dressing || 'NONE',
                     attendance_status: attToday?.status || 'A',
                     is_late_today: attToday?.status === 'late',

@@ -39,8 +39,28 @@ const UserSchema = new mongoose.Schema({
     exit_time: { type: String, default: '18:00' },
     break_in: { type: String, default: '13:00' },
     break_off: { type: String, default: '14:00' },
-    annual_leaves: { type: Number, default: 20 },
-    casual_leaves: { type: Number, default: 0 },
+    annual_leaves: {
+        type: Number,
+        default: 20,
+    },
+    casual_leaves: {
+        type: Number,
+        default: 12,
+    },
+    // New fields for real-time tracking on User document
+    current_check_in: {
+        type: Date,
+        default: null,
+    },
+    current_check_out: {
+        type: Date,
+        default: null,
+    },
+    attendance_status: {
+        type: String,
+        enum: ['present', 'absent', 'late', 'on_leave', 'active'],
+        default: 'absent',
+    },
     half_day: { type: Number, default: 0 },
     status: { type: String, default: 'active' },
     createdAt: {
