@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
         await dbConnect();
         const body = await request.json();
-        const { action, note, dressing } = body; // action: 'checkin' | 'checkout'
+        const { action, note, dressing, attendanceId } = body; // action: 'checkin' | 'checkout' | 'set_dressing'
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -113,6 +113,7 @@ export async function POST(request: Request) {
                 checkIn: new Date(),
                 status: status, // 'present' or 'late'
                 notes: note,
+                // Dressing will be assigned/updated by admin later; default to 'none' for now
                 dressing: dressing || 'none'
             });
 
@@ -142,6 +143,28 @@ export async function POST(request: Request) {
                 user.current_check_out = new Date();
                 await user.save();
             }
+        } else if (action === 'set_dressing') {
+            // Admin-only: set or update dressing for a specific attendance record
+            if (decoded.role !== 'admin') {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
+
+            if (!attendanceId || !dressing) {
+                return NextResponse.json({ error: 'attendanceId and dressing are required' }, { status: 400 });
+            }
+
+            const validDressings = ['casual', 'formal', 'none'];
+            if (!validDressings.includes(dressing)) {
+                return NextResponse.json({ error: 'Invalid dressing value' }, { status: 400 });
+            }
+
+            attendance = await AttendanceModel.findById(attendanceId);
+            if (!attendance) {
+                return NextResponse.json({ error: 'Attendance not found' }, { status: 404 });
+            }
+
+            attendance.dressing = dressing;
+            await attendance.save();
         }
 
         return NextResponse.json(attendance);

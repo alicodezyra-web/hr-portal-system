@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Calendar, Filter, Loader2, RefreshCcw, Info, Camera, CheckCircle2 } from 'lucide-react';
+import { Search, Download, Calendar, Filter, Loader2, RefreshCcw, Info, Camera, CheckCircle2, Shirt } from 'lucide-react';
 import { Card, Badge, PrimaryButton } from '@/components/SharedUI';
 import { toast } from 'react-toastify';
 
@@ -13,6 +13,7 @@ const Logs: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [dateFilter, setDateFilter] = useState<'all' | 'today'>('today'); // Default to today
+    const [updatingDressingId, setUpdatingDressingId] = useState<string | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -31,6 +32,29 @@ const Logs: React.FC = () => {
             // console.error('Error fetching data:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDressingChange = async (attendanceId: string, dressing: 'formal' | 'casual' | 'none') => {
+        try {
+            setUpdatingDressingId(attendanceId);
+            const res = await fetch('/api/attendance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'set_dressing', attendanceId, dressing })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                toast.error(data.error || 'Failed to update dressing');
+                return;
+            }
+            toast.success('Dressing updated');
+            // Refresh logs so UI reflects latest dressing
+            fetchData();
+        } catch (e) {
+            toast.error('Network error while updating dressing');
+        } finally {
+            setUpdatingDressingId(null);
         }
     };
 
@@ -243,11 +267,26 @@ const Logs: React.FC = () => {
                                         </td>
                                         <td className="px-8 py-6 text-center">
                                             {dateFilter === 'today' ? (
-                                                <div className="flex flex-col items-center">
+                                                <div className="flex flex-col items-center gap-2">
                                                     {user.todayLog ? (
                                                         <>
                                                             <span className="text-xs font-black text-black">IN: {formatTime(user.todayLog.checkIn)}</span>
-                                                            <span className="text-[10px] font-bold text-zinc-400">OUT: {user.todayLog.checkOut ? formatTime(user.todayLog.checkOut) : 'ACTIVE'}</span>
+                                                            <span className="text-[10px] font-bold text-zinc-400">
+                                                                OUT: {user.todayLog.checkOut ? formatTime(user.todayLog.checkOut) : 'ACTIVE'}
+                                                            </span>
+                                                            <div className="flex items-center gap-2 mt-2">
+                                                                <span className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">Dressing</span>
+                                                                <select
+                                                                    value={user.todayLog.dressing || 'none'}
+                                                                    onChange={(e) => handleDressingChange(user.todayLog._id, e.target.value as any)}
+                                                                    disabled={updatingDressingId === user.todayLog._id}
+                                                                    className="text-[9px] font-black uppercase tracking-widest border border-zinc-200 rounded-xl px-2 py-1 bg-white"
+                                                                >
+                                                                    <option value="none">None</option>
+                                                                    <option value="formal">Formal</option>
+                                                                    <option value="casual">Casual</option>
+                                                                </select>
+                                                            </div>
                                                         </>
                                                     ) : (
                                                         <span className="text-[10px] font-black text-zinc-300">-</span>

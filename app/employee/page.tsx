@@ -18,7 +18,6 @@ const EmployeeDashboard: React.FC = () => {
     const [currentTime, setCurrentTime] = useState(new Date());
     const [timer, setTimer] = useState("00:00:00");
     const [showScanner, setShowScanner] = useState(false);
-    const [dressing, setDressing] = useState<'casual' | 'formal'>('formal');
 
     // Real-time Clock
     useEffect(() => {
@@ -115,7 +114,7 @@ const EmployeeDashboard: React.FC = () => {
             const res = await fetch('/api/attendance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'checkin', dressing })
+                body: JSON.stringify({ action: 'checkin' })
             });
             const data = await res.json();
             if (res.ok) {
@@ -196,26 +195,6 @@ const EmployeeDashboard: React.FC = () => {
                                 <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest leading-relaxed mb-6">
                                     Scan QR terminal to initiate active shift protocol.
                                 </p>
-                            </div>
-
-                            <div className="w-full space-y-3 mb-8">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Dressing Protocol</p>
-                                <div className="flex gap-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setDressing('formal')}
-                                        className={`flex-1 py-4 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${dressing === 'formal' ? 'border-black bg-black text-white' : 'border-zinc-100 bg-zinc-50 text-zinc-400'}`}
-                                    >
-                                        Formal
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setDressing('casual')}
-                                        className={`flex-1 py-4 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${dressing === 'casual' ? 'border-black bg-black text-white' : 'border-zinc-100 bg-zinc-50 text-zinc-400'}`}
-                                    >
-                                        Casual
-                                    </button>
-                                </div>
                             </div>
 
                             <PrimaryButton onClick={handleOpenScanner} className="w-full py-6 text-sm tracking-[0.2em]">
