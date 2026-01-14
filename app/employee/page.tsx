@@ -18,6 +18,14 @@ const EmployeeDashboard: React.FC = () => {
     const [currentTime, setCurrentTime] = useState(new Date());
     const [timer, setTimer] = useState("00:00:00");
     const [showScanner, setShowScanner] = useState(false);
+    const [monthlyStats, setMonthlyStats] = useState({
+        present: 0,
+        late: 0,
+        leave: 0,
+        formal: 0,
+        casual: 0,
+        none: 0,
+    });
 
     // Real-time Clock
     useEffect(() => {
@@ -33,6 +41,24 @@ const EmployeeDashboard: React.FC = () => {
             const data = await res.json();
             if (res.ok) {
                 const todayKey = new Date().toISOString().slice(0, 10);
+                const now = new Date();
+                const currentMonth = now.getMonth();
+                const currentYear = now.getFullYear();
+
+                const monthAttendance = (data || []).filter((a: any) => {
+                    const d = new Date(a.date);
+                    return !isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+                });
+
+                setMonthlyStats({
+                    present: monthAttendance.filter((a: any) => a.status === 'present').length,
+                    late: monthAttendance.filter((a: any) => a.status === 'late').length,
+                    leave: monthAttendance.filter((a: any) => a.status === 'leave').length,
+                    formal: monthAttendance.filter((a: any) => (a.dressing || 'none') === 'formal').length,
+                    casual: monthAttendance.filter((a: any) => (a.dressing || 'none') === 'casual').length,
+                    none: monthAttendance.filter((a: any) => (a.dressing || 'none') === 'none').length,
+                });
+
                 // Filter out records that are already checked out to show QR scanner again
                 const todayRecord = data.find((r: any) => {
                     const d = new Date(r.date);
@@ -181,6 +207,33 @@ const EmployeeDashboard: React.FC = () => {
                     </div>
                     <p className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">{new Date().toLocaleDateString('en-PK', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
                 </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+                <Card className="p-6 text-center border-zinc-100 shadow-sm">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">This Month Present</p>
+                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.present}</p>
+                </Card>
+                <Card className="p-6 text-center border-zinc-100 shadow-sm">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">This Month Late</p>
+                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.late}</p>
+                </Card>
+                <Card className="p-6 text-center border-zinc-100 shadow-sm">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">This Month Leave</p>
+                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.leave}</p>
+                </Card>
+                <Card className="p-6 text-center border-zinc-100 shadow-sm">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Formal</p>
+                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.formal}</p>
+                </Card>
+                <Card className="p-6 text-center border-zinc-100 shadow-sm">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Casual</p>
+                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.casual}</p>
+                </Card>
+                <Card className="p-6 text-center border-zinc-100 shadow-sm">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Unmarked</p>
+                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.none}</p>
+                </Card>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

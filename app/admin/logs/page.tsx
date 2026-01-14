@@ -135,6 +135,29 @@ const Logs: React.FC = () => {
         return matchesSearch;
     });
 
+    // Overall monthly summary across all employees (for Monthly view)
+    const monthlyTotals = (() => {
+        if (dateFilter !== 'all') {
+            return { present: 0, late: 0, absent: 0, leave: 0, formal: 0, casual: 0, none: 0 };
+        }
+        const totalPresent = monthlyLogs.filter((l) => l.status === 'present').length;
+        const totalLate = monthlyLogs.filter((l) => l.status === 'late').length;
+        const totalLeave = monthlyLogs.filter((l) => l.status === 'leave').length;
+        const totalAbsent = monthlyLogs.filter((l) => l.status === 'absent').length;
+        const totalFormal = monthlyLogs.filter((l) => (l.dressing || 'none') === 'formal').length;
+        const totalCasual = monthlyLogs.filter((l) => (l.dressing || 'none') === 'casual').length;
+        const totalNone = monthlyLogs.filter((l) => (l.dressing || 'none') === 'none').length;
+        return {
+            present: totalPresent,
+            late: totalLate,
+            leave: totalLeave,
+            absent: totalAbsent,
+            formal: totalFormal,
+            casual: totalCasual,
+            none: totalNone,
+        };
+    })();
+
     // Sort: For today, show those with activity (logs) first
     if (dateFilter === 'today') {
         userSummary.sort((a, b) => {
@@ -195,6 +218,29 @@ const Logs: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {dateFilter === 'all' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <Card className="p-6 border-zinc-100 shadow-sm">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Monthly Present</p>
+                        <p className="text-3xl font-black tracking-tighter text-black">{monthlyTotals.present}</p>
+                    </Card>
+                    <Card className="p-6 border-zinc-100 shadow-sm">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Monthly Late</p>
+                        <p className="text-3xl font-black tracking-tighter text-black">{monthlyTotals.late}</p>
+                    </Card>
+                    <Card className="p-6 border-zinc-100 shadow-sm">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Monthly Leave</p>
+                        <p className="text-3xl font-black tracking-tighter text-black">{monthlyTotals.leave}</p>
+                    </Card>
+                    <Card className="p-6 border-zinc-100 shadow-sm">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Monthly Dressing (F/C/N)</p>
+                        <p className="text-3xl font-black tracking-tighter text-black">
+                            {monthlyTotals.formal}/{monthlyTotals.casual}/{monthlyTotals.none}
+                        </p>
+                    </Card>
+                </div>
+            )}
 
             <Card className="!p-0 overflow-hidden shadow-2xl">
                 <div className="p-8 border-b border-zinc-100 flex flex-wrap items-center justify-between gap-6 bg-zinc-50/20">
@@ -276,16 +322,28 @@ const Logs: React.FC = () => {
                                                             </span>
                                                             <div className="flex items-center gap-2 mt-2">
                                                                 <span className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">Dressing</span>
-                                                                <select
-                                                                    value={user.todayLog.dressing || 'none'}
-                                                                    onChange={(e) => handleDressingChange(user.todayLog._id, e.target.value as any)}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDressingChange(user.todayLog._id, 'formal')}
                                                                     disabled={updatingDressingId === user.todayLog._id}
-                                                                    className="text-[9px] font-black uppercase tracking-widest border border-zinc-200 rounded-xl px-2 py-1 bg-white"
+                                                                    className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${user.todayLog.dressing === 'formal'
+                                                                        ? 'border-black bg-black text-white'
+                                                                        : 'border-zinc-200 bg-white text-zinc-500'
+                                                                        }`}
                                                                 >
-                                                                    <option value="none">None</option>
-                                                                    <option value="formal">Formal</option>
-                                                                    <option value="casual">Casual</option>
-                                                                </select>
+                                                                    Formal
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDressingChange(user.todayLog._id, 'casual')}
+                                                                    disabled={updatingDressingId === user.todayLog._id}
+                                                                    className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${user.todayLog.dressing === 'casual'
+                                                                        ? 'border-black bg-black text-white'
+                                                                        : 'border-zinc-200 bg-white text-zinc-500'
+                                                                        }`}
+                                                                >
+                                                                    Casual
+                                                                </button>
                                                             </div>
                                                         </>
                                                     ) : (
