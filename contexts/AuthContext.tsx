@@ -12,6 +12,12 @@ export interface AuthUser {
     department?: string;
     shift?: string;
     phone?: string;
+    position?: string;
+    salary?: string;
+    entry_time?: string;
+    exit_time?: string;
+    break_in?: string;
+    break_off?: string;
 }
 
 interface AuthContextType {

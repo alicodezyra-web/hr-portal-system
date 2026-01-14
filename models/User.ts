@@ -20,6 +20,10 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please provide a full name'],
     },
+    employee_id: {
+        type: String,
+        default: '',
+    },
     role: {
         type: String,
         enum: ['admin', 'employee'],

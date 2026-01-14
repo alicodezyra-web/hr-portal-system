@@ -18,9 +18,11 @@ const AdminDashboard: React.FC = () => {
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingProfile, setEditingProfile] = useState<any>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState(new Date());
 
     const fetchData = async () => {
-        setLoading(true);
+        // Only set loading on initial fetch
+        if (data.length === 0) setLoading(true);
         try {
             const [usersRes, attendanceRes] = await Promise.all([
                 fetch('/api/users'),
@@ -53,6 +55,7 @@ const AdminDashboard: React.FC = () => {
 
                 return {
                     ...u,
+                    check_in_raw: attToday?.check_in,
                     check_in: attToday?.check_in || '-',
                     check_out: attToday?.check_out || '-',
                     dressing: attToday?.dressing || 'NONE',
@@ -64,6 +67,7 @@ const AdminDashboard: React.FC = () => {
             });
 
             setData(combined);
+            setLastUpdated(new Date());
         } catch (error) {
             toast.error("Network connection unstable");
         } finally {
@@ -73,20 +77,27 @@ const AdminDashboard: React.FC = () => {
 
     useEffect(() => {
         fetchData();
+        // Live polling every 30 seconds
+        const interval = setInterval(fetchData, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     const formatTime = (timeStr: any) => {
         if (!timeStr || timeStr === '-' || timeStr === 'NONE') return '-';
-        // Handle ISO strings from Date objects
-        if (typeof timeStr === 'string' && timeStr.includes('T')) {
-            try {
+        try {
+            if (typeof timeStr === 'string' && timeStr.includes('T')) {
                 const date = new Date(timeStr);
-                if (isNaN(date.getTime())) return timeStr;
-                return date.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: false });
-            } catch (e) {
-                return timeStr;
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: true });
+                }
             }
-        }
+            if (typeof timeStr === 'string' && timeStr.includes(':')) {
+                const [h, m] = timeStr.split(':');
+                const date = new Date();
+                date.setHours(parseInt(h), parseInt(m));
+                return date.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: true });
+            }
+        } catch (e) { }
         return timeStr;
     };
 
@@ -96,19 +107,20 @@ const AdminDashboard: React.FC = () => {
         p.cnic?.includes(searchTerm)
     );
 
-    const handleEdit = (profile: any) => {
-        setEditingProfile({ ...profile });
-        setShowEditModal(true);
-    };
-
     const stats = [
         { label: "Today Strength", value: data.length.toString(), icon: <Users size={24} />, color: 'bg-black' },
         { label: 'Today Present', value: data.filter(p => p.attendance_status === 'present' || p.attendance_status === 'late').length.toString(), icon: <UserCheck size={24} />, color: 'bg-emerald-500' },
-        { label: 'Today Late', value: data.filter(p => p.attendance_status === 'late').length.toString(), icon: <Clock size={24} />, color: 'bg-amber-500' },
         { label: 'Today Absent', value: data.filter(p => p.attendance_status === 'absent' || p.attendance_status === 'A').length.toString(), icon: <UserMinus size={24} />, color: 'bg-rose-500' },
+        { label: 'On Leave Today', value: data.filter(p => p.attendance_status === 'leave').length.toString(), icon: <Clock size={24} />, color: 'bg-zinc-400' },
     ];
 
-    if (loading) return (
+    // Recent Check-Ins for Live Feed
+    const recentCheckIns = data
+        .filter(p => p.check_in_raw)
+        .sort((a, b) => new Date(b.check_in_raw).getTime() - new Date(a.check_in_raw).getTime())
+        .slice(0, 10);
+
+    if (loading && data.length === 0) return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
             <Loader2 className="animate-spin text-black" size={48} />
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">Syncing Intelligence...</p>
@@ -121,21 +133,21 @@ const AdminDashboard: React.FC = () => {
             <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-8 bg-zinc-50/50 p-8 rounded-[3rem] border border-zinc-100">
                 <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Live Control Center</p>
+                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Attendance Overview</p>
                     </div>
                     <h1 className="text-4xl sm:text-6xl font-black text-black tracking-tighter uppercase leading-[0.85]">
-                        Today's <br /> Stream
+                        Today's <br /> Attendance
                     </h1>
                     <div className="flex items-center gap-6 pt-2">
                         <div className="flex flex-col">
                             <span className="text-[12px] font-black text-black uppercase">PK Time Zone</span>
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase">{new Date().toLocaleTimeString('en-PK', { hour12: false })}</span>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase">{lastUpdated.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                         </div>
                         <div className="h-8 w-px bg-zinc-200"></div>
                         <div className="flex flex-col">
-                            <span className="text-[12px] font-black text-black uppercase">Active Policy</span>
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase">Sunday: Off Duty</span>
+                            <span className="text-[12px] font-black text-black uppercase">Active Shift</span>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase">General: 09:00 - 18:00</span>
                         </div>
                     </div>
                 </div>
@@ -143,13 +155,13 @@ const AdminDashboard: React.FC = () => {
                 <div className="flex flex-wrap gap-4">
                     <PrimaryButton
                         icon={QrCode}
-                        onClick={() => window.open(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(window.location.host + '/employee')}`, '_blank')}
+                        onClick={() => window.open(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(window.location.protocol + '//' + window.location.host + '/employee')}`, '_blank')}
                         className="bg-black text-white hover:bg-zinc-800 transition-all shadow-xl"
                     >
                         Terminal QR
                     </PrimaryButton>
                     <PrimaryButton icon={RefreshCcw} onClick={fetchData} className="bg-white !text-black border border-zinc-200 hover:border-black shadow-none transition-all">
-                        Update Feed
+                        Refresh List
                     </PrimaryButton>
                 </div>
             </div>
@@ -171,133 +183,124 @@ const AdminDashboard: React.FC = () => {
                 ))}
             </div>
 
-            <Card className="!p-0 border-zinc-100 shadow-2xl rounded-[2rem] overflow-hidden">
-                <div className="p-6 sm:p-10 border-b border-zinc-100 flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-zinc-50/20">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black text-white rounded-xl flex items-center justify-center">
-                            <TableIcon size={20} />
+            <div className="w-full">
+                {/* Master Registry Table */}
+                <Card className="!p-0 border-zinc-100 shadow-2xl rounded-[2rem] overflow-hidden">
+                    <div className="p-6 sm:p-10 border-b border-zinc-100 flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-zinc-50/20">
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black text-white rounded-xl flex items-center justify-center">
+                                <TableIcon size={20} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg sm:text-xl font-black text-black tracking-tight leading-none mb-1">Attendance Log</h3>
+                                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Real-time stats for all employees</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="text-lg sm:text-xl font-black text-black tracking-tight leading-none mb-1">Master Registry</h3>
-                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Real-time Deployment Tracking</p>
+                        <div className="relative w-full lg:max-w-xs">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={16} />
+                            <input
+                                type="text"
+                                placeholder="Search employees..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-11 pr-5 py-4 bg-white border border-zinc-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-black transition-all"
+                            />
                         </div>
                     </div>
-                    <div className="relative w-full lg:max-w-xs">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={16} />
-                        <input
-                            type="text"
-                            placeholder="Lookup..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-11 pr-5 py-4 bg-white border border-zinc-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-black transition-all"
-                        />
-                    </div>
-                </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left whitespace-nowrap min-w-[2400px] border-collapse">
-                        <thead>
-                            <tr className="bg-zinc-50 border-y border-zinc-100">
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-r border-zinc-100">ID</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-r border-zinc-100">Employee Name</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Attendance</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Actual In</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Actual Out</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Casual Leave</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Half Day</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-r border-zinc-100">Mobile No</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-r border-zinc-100">Position</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-r border-zinc-100">Job Title</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-r border-zinc-100">CNIC No</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Timing In</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Timing Out</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Late Summary</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Break In</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Break Off</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-r border-zinc-100">Shift</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-r border-zinc-100">Email</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center border-r border-zinc-100">Casual Dressing</th>
-                                <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Formal Dressing</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                            {filteredData.map((emp, i) => (
-                                <tr key={emp._id} className="hover:bg-zinc-50/50 transition-colors text-[11px] font-bold">
-                                    <td className="px-6 py-5 border-r border-zinc-100 text-zinc-400">{i + 1}</td>
-                                    <td className="px-6 py-5 border-r border-zinc-100">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 bg-zinc-900 text-white rounded-lg flex items-center justify-center font-black text-[10px]">
-                                                {emp.full_name?.[0]}
-                                            </div>
-                                            <span className="uppercase text-black font-black whitespace-nowrap">{emp.full_name}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100">
-                                        <Badge variant={emp.attendance_status === 'present' ? 'emerald' : emp.attendance_status === 'late' ? 'amber' : 'rose'}>
-                                            {emp.attendance_status === 'present' ? 'P' : emp.attendance_status === 'late' ? 'L' : 'A'}
-                                        </Badge>
-                                    </td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100 tabular-nums text-emerald-600 font-black">{formatTime(emp.check_in)}</td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100 tabular-nums text-rose-600 font-black">{formatTime(emp.check_out)}</td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100 text-zinc-500">{emp.casual_leaves || emp.monthly_leaves || '-'}</td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100 text-zinc-500">{emp.half_day || '-'}</td>
-                                    <td className="px-6 py-5 border-r border-zinc-100 text-black">{emp.phone || '-'}</td>
-                                    <td className="px-6 py-5 border-r border-zinc-100 text-zinc-500 uppercase">{emp.position || '-'}</td>
-                                    <td className="px-6 py-5 border-r border-zinc-100 text-zinc-500 uppercase">{emp.department || '-'}</td>
-                                    <td className="px-6 py-5 border-r border-zinc-100 text-black">{emp.cnic || '-'}</td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100 tabular-nums text-black font-black">{formatTime(emp.entry_time)}</td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100 tabular-nums text-black font-black">{formatTime(emp.exit_time)}</td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100">
-                                        <span className="text-[10px] font-black text-amber-600">{emp.late_summary}</span>
-                                    </td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100 tabular-nums text-zinc-500">{formatTime(emp.break_in)}</td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100 tabular-nums text-zinc-500">{formatTime(emp.break_off)}</td>
-                                    <td className="px-6 py-5 border-r border-zinc-100 uppercase text-black font-black">{emp.shift || '-'}</td>
-                                    <td className="px-6 py-5 border-r border-zinc-100 text-zinc-400 lowercase">{emp.email}</td>
-                                    <td className="px-6 py-5 text-center border-r border-zinc-100">
-                                        <Badge variant={emp.dressing === 'casual' ? 'black' : 'slate'}>
-                                            {emp.dressing === 'casual' ? 'YES' : 'NO'}
-                                        </Badge>
-                                    </td>
-                                    <td className="px-6 py-5 text-center">
-                                        <Badge variant={emp.dressing === 'formal' ? 'black' : 'slate'}>
-                                            {emp.dressing === 'formal' ? 'YES' : 'NO'}
-                                        </Badge>
-                                    </td>
+                    {/* Desktop View Table */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-left whitespace-nowrap border-collapse">
+                            <thead>
+                                <tr className="bg-zinc-50 border-y border-zinc-100">
+                                    <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Employee Name</th>
+                                    <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Status</th>
+                                    <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Time In</th>
+                                    <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Time Out</th>
+                                    <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Active Shift</th>
+                                    <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Department</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </Card>
-
-            <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Registry Override">
-                {editingProfile && (
-                    <div className="space-y-6">
-                        <Input label="Full Name" value={editingProfile.full_name} onChange={(e: any) => setEditingProfile({ ...editingProfile, full_name: e.target.value })} />
-                        <Input label="Position" value={editingProfile.position} onChange={(e: any) => setEditingProfile({ ...editingProfile, position: e.target.value })} />
-                        <PrimaryButton onClick={async () => {
-                            setIsSaving(true);
-                            try {
-                                const res = await fetch('/api/users', {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ userId: editingProfile._id, updates: { full_name: editingProfile.full_name, position: editingProfile.position } })
-                                });
-                                if (res.ok) {
-                                    toast.success("Updated");
-                                    fetchData();
-                                    setShowEditModal(false);
-                                }
-                            } finally {
-                                setIsSaving(false);
-                            }
-                        }} disabled={isSaving} className="w-full">
-                            {isSaving ? 'Syncing...' : 'Update Base Records'}
-                        </PrimaryButton>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100">
+                                {filteredData.map((emp) => (
+                                    <tr key={emp._id} className="hover:bg-zinc-50/50 transition-colors text-[11px] font-bold">
+                                        <td className="px-6 py-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-black text-white rounded-lg flex items-center justify-center font-black text-[10px]">
+                                                    {emp.full_name?.[0]}
+                                                </div>
+                                                <span className="uppercase text-black font-black">{emp.full_name}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-6 text-center">
+                                            <Badge variant={emp.attendance_status === 'present' ? 'emerald' : emp.attendance_status === 'late' ? 'amber' : emp.attendance_status === 'leave' ? 'slate' : 'rose'}>
+                                                {emp.attendance_status?.toUpperCase() || 'ABSENT'}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-6 py-6 text-center tabular-nums text-emerald-600 font-black">{formatTime(emp.check_in)}</td>
+                                        <td className="px-6 py-6 text-center tabular-nums text-rose-600 font-black">{formatTime(emp.check_out)}</td>
+                                        <td className="px-6 py-6 text-center">
+                                            <p className="uppercase text-black">{emp.shift}</p>
+                                            <p className="text-[9px] text-zinc-400">{formatTime(emp.entry_time)} - {formatTime(emp.exit_time)}</p>
+                                        </td>
+                                        <td className="px-6 py-6 text-center italic text-zinc-400 uppercase tracking-widest text-[9px]">{emp.department}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
-                )}
-            </Modal>
+
+                    {/* Mobile View Cards */}
+                    <div className="md:hidden divide-y divide-zinc-100">
+                        {filteredData.map((emp) => (
+                            <div key={emp._id} className="p-6 space-y-4 bg-white">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center font-black text-xs">
+                                            {emp.full_name?.[0]}
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-black text-[13px] uppercase tracking-tight leading-none mb-1">{emp.full_name}</p>
+                                            <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">{emp.department}</p>
+                                        </div>
+                                    </div>
+                                    <Badge variant={emp.attendance_status === 'present' ? 'emerald' : emp.attendance_status === 'late' ? 'amber' : emp.attendance_status === 'leave' ? 'slate' : 'rose'}>
+                                        {emp.attendance_status?.toUpperCase() || 'ABSENT'}
+                                    </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="p-3 bg-zinc-50 rounded-2xl flex flex-col items-center justify-center">
+                                        <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest mb-1">Checked In</p>
+                                        <p className="font-black text-emerald-600 text-[11px] tabular-nums">{formatTime(emp.check_in)}</p>
+                                    </div>
+                                    <div className="p-3 bg-zinc-50 rounded-2xl flex flex-col items-center justify-center">
+                                        <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest mb-1">Checked Out</p>
+                                        <p className="font-black text-rose-600 text-[11px] tabular-nums">{formatTime(emp.check_out)}</p>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 border border-zinc-100 rounded-[1.5rem] flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest mb-1">Assigned Protocol</p>
+                                        <p className="text-[10px] font-black text-black uppercase">{emp.shift}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest mb-1">Protocol Hours</p>
+                                        <p className="text-[10px] font-black text-zinc-500">{formatTime(emp.entry_time)} - {formatTime(emp.exit_time)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {filteredData.length === 0 && (
+                        <div className="p-20 text-center">
+                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">No attendance records found for today</p>
+                        </div>
+                    )}
+                </Card>
+            </div>
         </div>
     );
 };

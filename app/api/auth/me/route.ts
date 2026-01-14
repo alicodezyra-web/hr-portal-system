@@ -32,6 +32,12 @@ export async function GET() {
                 role: user.role,
                 department: user.department,
                 shift: user.shift,
+                position: user.position,
+                salary: user.salary,
+                entry_time: user.entry_time,
+                exit_time: user.exit_time,
+                break_in: user.break_in,
+                break_off: user.break_off,
             }
         });
     } catch (error) {

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
-import User from '@/models/User';
+import Shift from '@/models/Shift';
 import { verifyToken, getAuthToken } from '@/lib/auth';
-import bcrypt from 'bcryptjs';
 
 export async function GET() {
     try {
@@ -10,13 +9,11 @@ export async function GET() {
         if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const decoded: any = await verifyToken(token);
-        if (!decoded || decoded.role !== 'admin') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
+        if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         await dbConnect();
-        const users = await User.find({ role: 'employee' }).sort({ full_name: 1 });
-        return NextResponse.json(users);
+        const shifts = await Shift.find({ status: 'active' }).sort({ name: 1 });
+        return NextResponse.json(shifts);
     } catch (error) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
@@ -34,28 +31,14 @@ export async function POST(request: Request) {
 
         await dbConnect();
         const body = await request.json();
-        const { email, password, full_name, role, ...rest } = body;
 
-        if (!email || !password || !full_name) {
-            return NextResponse.json({ error: 'Email, password, and full name are required' }, { status: 400 });
+        const existing = await Shift.findOne({ name: { $regex: new RegExp(`^${body.name}$`, 'i') } });
+        if (existing) {
+            return NextResponse.json({ error: 'Shift name already exists' }, { status: 400 });
         }
 
-        const existingUser = await User.findOne({ email: email.toLowerCase() });
-        if (existingUser) {
-            return NextResponse.json({ error: 'User already exists' }, { status: 400 });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 12);
-
-        const newUser = await User.create({
-            email: email.toLowerCase(),
-            password: hashedPassword,
-            full_name,
-            role: role || 'employee',
-            ...rest
-        });
-
-        return NextResponse.json(newUser, { status: 201 });
+        const shift = await Shift.create(body);
+        return NextResponse.json(shift, { status: 201 });
     } catch (error: any) {
         return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
     }
@@ -73,27 +56,15 @@ export async function PATCH(request: Request) {
 
         await dbConnect();
         const body = await request.json();
-        const { id, userId, updates, ...directData } = body;
+        const { id, ...updates } = body;
 
-        const finalId = id || userId;
-        const finalUpdate = updates || directData;
+        if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
-        if (!finalId) return NextResponse.json({ error: 'ID required' }, { status: 400 });
-
-        const user = await User.findByIdAndUpdate(
-            finalId,
-            { ...finalUpdate, updatedAt: new Date() },
-            { new: true }
-        );
-
-        return NextResponse.json(user);
+        const shift = await Shift.findByIdAndUpdate(id, updates, { new: true });
+        return NextResponse.json(shift);
     } catch (error) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-}
-
-export async function PUT(request: Request) {
-    return PATCH(request);
 }
 
 export async function DELETE(request: Request) {
@@ -107,16 +78,14 @@ export async function DELETE(request: Request) {
         }
 
         const { searchParams } = new URL(request.url);
-        const userId = searchParams.get('userId');
+        const id = searchParams.get('id');
 
-        if (!userId) {
-            return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-        }
+        if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
         await dbConnect();
-        await User.findByIdAndDelete(userId);
+        await Shift.findByIdAndDelete(id);
 
-        return NextResponse.json({ message: 'User deleted successfully' });
+        return NextResponse.json({ message: 'Shift deleted' });
     } catch (error) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

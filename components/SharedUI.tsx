@@ -39,7 +39,7 @@ export const SectionHeader: React.FC<{ title: string; subtitle?: string; icon?: 
 );
 
 export const PrimaryButton: React.FC<{ onClick?: () => void; children: React.ReactNode; icon?: LucideIcon; className?: string; disabled?: boolean; type?: "button" | "submit" | "reset" }> = ({ onClick, children, icon: Icon, className = "", disabled, type = "button" }) => (
-  <button 
+  <button
     type={type}
     onClick={onClick}
     disabled={disabled}
@@ -55,14 +55,14 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
-      <div className="relative bg-white rounded-t-[2rem] sm:rounded-[3rem] w-full max-w-4xl h-[92vh] sm:h-auto sm:max-h-[90vh] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300">
-        <div className="p-6 sm:p-8 border-b border-slate-100 flex items-center justify-between bg-white">
-          <h3 className="text-xl sm:text-2xl font-black text-black tracking-tight">{title}</h3>
+      <div className="relative bg-white rounded-t-[2.5rem] sm:rounded-[3rem] w-full max-w-4xl h-[85vh] sm:h-auto sm:max-h-[90vh] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-500">
+        <div className="p-6 sm:p-8 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+          <h3 className="text-xl sm:text-2xl font-black text-black tracking-tight uppercase leading-none">{title}</h3>
           <button onClick={onClose} className="p-2 sm:p-3 hover:bg-slate-100 rounded-xl sm:rounded-2xl transition-colors text-slate-400">
             <X size={24} />
           </button>
         </div>
-        <div className="p-6 sm:p-8 overflow-y-auto max-h-[calc(92vh-100px)] sm:max-h-[calc(90vh-140px)]">
+        <div className="p-6 sm:p-10 overflow-y-auto h-[calc(100%-80px)] sm:max-h-[calc(90vh-140px)] custom-scrollbar">
           {children}
         </div>
       </div>
@@ -70,31 +70,31 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
   );
 };
 
-export const Input: React.FC<{ label: string; icon?: LucideIcon; [key: string]: any }> = ({ label, icon: Icon, ...props }) => (
-  <div className="space-y-1.5">
-    <label className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+export const Input: React.FC<{ label: string; icon?: LucideIcon;[key: string]: any }> = ({ label, icon: Icon, ...props }) => (
+  <div className="space-y-2">
+    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
     <div className="relative group">
-      {Icon && <Icon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-black transition-colors" size={18} />}
-      <input 
+      {Icon && <Icon className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-black transition-colors" size={18} />}
+      <input
         {...props}
-        className={`w-full ${Icon ? 'pl-11' : 'px-5'} pr-4 py-3 sm:py-3.5 bg-white border border-slate-200 rounded-xl sm:rounded-2xl focus:ring-4 focus:ring-slate-500/10 focus:border-black outline-none transition-all font-medium text-black text-sm sm:text-base`}
+        className={`w-full ${Icon ? 'pl-14' : 'px-6'} pr-4 py-4 sm:py-5 bg-zinc-50 border border-transparent rounded-[1.5rem] sm:rounded-[2rem] focus:bg-white focus:border-black outline-none transition-all font-bold text-black text-[12px] sm:text-sm uppercase tracking-tight`}
       />
     </div>
   </div>
 );
 
-export const Select: React.FC<{ label: string; options: string[]; [key: string]: any }> = ({ label, options, ...props }) => (
-  <div className="space-y-1.5">
-    <label className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+export const Select: React.FC<{ label: string; options: string[];[key: string]: any }> = ({ label, options, ...props }) => (
+  <div className="space-y-2">
+    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
     <div className="relative group">
-      <select 
+      <select
         {...props}
-        className="w-full px-5 py-3 sm:py-3.5 bg-white border border-slate-200 rounded-xl sm:rounded-2xl focus:ring-4 focus:ring-slate-500/10 focus:border-black outline-none transition-all font-medium text-black text-sm sm:text-base appearance-none"
+        className="w-full px-6 py-4 sm:py-5 bg-zinc-50 border border-transparent rounded-[1.5rem] sm:rounded-[2rem] focus:bg-white focus:border-black outline-none transition-all font-bold text-black text-[12px] sm:text-sm uppercase tracking-tight appearance-none cursor-pointer"
       >
         {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
       </select>
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within:text-black transition-colors">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+      <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within:text-black transition-colors">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
       </div>
     </div>
   </div>

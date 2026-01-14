@@ -14,14 +14,24 @@ export async function GET(request: Request) {
 
         await dbConnect();
         const { searchParams } = new URL(request.url);
-        const userId = searchParams.get('userId') || decoded.id;
+        const userId = searchParams.get('userId');
 
-        // Only allow admins to see other's logs
-        if (userId !== decoded.id && decoded.role !== 'admin') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        let query = {};
+        if (userId) {
+            // If userId is provided, check permissions
+            if (userId !== decoded.id && decoded.role !== 'admin') {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
+            query = { user: userId };
+        } else if (decoded.role !== 'admin') {
+            // If no userId and not admin, return only self
+            query = { user: decoded.id };
         }
+        // If no userId and is admin, query remains empty (fetch all)
 
-        const attendance = await AttendanceModel.find({ user: userId }).sort({ date: -1 });
+        const attendance = await AttendanceModel.find(query)
+            .populate('user', 'full_name email role position department shift entry_time exit_time break_in break_off salary phone')
+            .sort({ date: -1 });
         return NextResponse.json(attendance);
     } catch (error) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

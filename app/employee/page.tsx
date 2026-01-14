@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     QrCode, Clock, Coffee, LogOut,
     Timer as TimerIcon, AlertCircle, CheckCircle2,
-    Loader2, Camera, X
+    Loader2, Camera, X, DollarSign, Briefcase, User
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, PrimaryButton } from '@/components/SharedUI';
@@ -85,7 +85,7 @@ const EmployeeDashboard: React.FC = () => {
                 const html5QrCode = new Html5Qrcode("reader");
                 qrScannerRef.current = html5QrCode;
                 await html5QrCode.start(
-                    { facingMode: "user" },
+                    { facingMode: "environment" },
                     { fps: 15, qrbox: { width: 250, height: 250 } },
                     onScanSuccess,
                     () => { }
@@ -117,9 +117,23 @@ const EmployeeDashboard: React.FC = () => {
         markAttendance();
     }
 
-    const formatTime = (timeStr: string | undefined) => {
-        if (!timeStr || timeStr === '-') return '-';
-        return timeStr; // Already in 24-hour format from backend
+    const formatTime = (timeStr: any) => {
+        if (!timeStr || timeStr === '-' || timeStr === 'NONE') return '-';
+        try {
+            if (typeof timeStr === 'string' && timeStr.includes('T')) {
+                const date = new Date(timeStr);
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: true });
+                }
+            }
+            if (typeof timeStr === 'string' && timeStr.includes(':')) {
+                const [h, m] = timeStr.split(':');
+                const date = new Date();
+                date.setHours(parseInt(h), parseInt(m));
+                return date.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: true });
+            }
+        } catch (e) { }
+        return timeStr;
     };
 
     const markAttendance = async () => {
@@ -169,17 +183,17 @@ const EmployeeDashboard: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row justify-between items-center bg-black p-8 sm:p-12 rounded-[2.5rem] sm:rounded-[4rem] text-white shadow-2xl gap-8">
                 <div className="text-center sm:text-left">
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-2">Authenticated User</p>
-                    <h2 className="text-4xl sm:text-6xl font-black tracking-tight leading-none mb-4">{user?.full_name?.split(' ')[0]}</h2>
+                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-2">Employee Records</p>
+                    <h2 className="text-4xl sm:text-6xl font-black tracking-tight leading-none mb-4">{user?.full_name}</h2>
                     <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                        <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/10">{user?.shift || 'MORNING'}</span>
                         <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/10">{user?.position || 'ASSOCIATE'}</span>
+                        <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/10">{user?.department?.toUpperCase() || 'OFFICE'}</span>
                     </div>
                 </div>
                 <div className="bg-white/5 p-6 rounded-[2.5rem] backdrop-blur-md border border-white/10 min-w-[200px] text-center">
                     <p className="text-[9px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-2">Protocol Clock (PKT)</p>
                     <div className="text-3xl sm:text-4xl font-black tracking-tighter tabular-nums mb-1">
-                        {currentTime.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                        {currentTime.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
                     </div>
                     <p className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">{new Date().toLocaleDateString('en-PK', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
                 </div>
@@ -193,14 +207,14 @@ const EmployeeDashboard: React.FC = () => {
                                 <Camera size={48} className="text-zinc-300 group-hover:text-black transition-colors" />
                             </div>
                             <div>
-                                <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight mb-3">Office Terminal Sync</h3>
+                                <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight mb-3">Sync Attendance</h3>
                                 <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest leading-relaxed mb-6">
-                                    Initiate camera to scan the physical QR terminal located at the operational bridge.
+                                    Scan QR terminal to initiate active shift protocol.
                                 </p>
                             </div>
 
                             <div className="w-full space-y-3 mb-8">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Select Today's Dressing</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Dressing Protocol</p>
                                 <div className="flex gap-4">
                                     <button
                                         type="button"
@@ -229,22 +243,22 @@ const EmployeeDashboard: React.FC = () => {
                                 <CheckCircle2 size={56} />
                             </div>
                             <div className="space-y-2">
-                                <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight">Deployment Logged</h3>
+                                <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight">Shift Active</h3>
                                 <p className={`text-[11px] font-black uppercase tracking-widest ${attendance.is_late ? 'text-amber-500' : 'text-emerald-500'}`}>
-                                    {attendance.is_late ? 'LATE ENTRY PROTOCOL ACTIVE' : 'OPTIMAL ENTRY LOGGED'}
+                                    {attendance.is_late ? 'LATE ENTRY LOGGED' : 'OPTIMAL ENTRY LOGGED'}
                                 </p>
-                                <p className="text-[10px] font-black text-zinc-400">AT {formatTime(attendance.check_in)} | DRESSING: {attendance.dressing?.toUpperCase()}</p>
+                                <p className="text-[10px] font-black text-zinc-400">AT {formatTime(attendance.check_in)}</p>
                             </div>
                             <div className="w-full p-8 bg-zinc-50 rounded-[3rem] border border-zinc-100">
-                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 mb-3">Live Mission Timer</p>
+                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 mb-3">Time in Shift</p>
                                 <p className="text-5xl sm:text-6xl font-black tracking-tighter text-black tabular-nums">{timer}</p>
                             </div>
                             {!attendance.check_out ? (
                                 <PrimaryButton onClick={handleClockOut} className="w-full !bg-rose-600 hover:!bg-rose-700 shadow-rose-100 py-5">
-                                    TERMINATE SESSION
+                                    TERMINATE SHIFT
                                 </PrimaryButton>
                             ) : (
-                                <div className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Shift Ended at {formatTime(attendance.check_out)}</div>
+                                <div className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Ended at {formatTime(attendance.check_out)}</div>
                             )}
                         </>
                     )}
@@ -252,19 +266,22 @@ const EmployeeDashboard: React.FC = () => {
 
                 <Card className="p-8 sm:p-10 space-y-8">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-zinc-100 rounded-[1.5rem] flex items-center justify-center text-black">
+                        <div className="w-14 h-14 bg-black text-white rounded-[1.5rem] flex items-center justify-center">
                             <TimerIcon size={28} />
                         </div>
                         <div className="text-left">
-                            <h3 className="text-xl font-black uppercase tracking-tight leading-none mb-2">Shift Parameters</h3>
-                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Operational Protocol Details</p>
+                            <h3 className="text-xl font-black uppercase tracking-tight leading-none mb-2">My Profile</h3>
+                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Confidential Employment Info</p>
                         </div>
                     </div>
 
                     <div className="space-y-4">
-                        <DetailBox icon={Clock} label="START PROTOCOL" value={formatTime(user?.entry_time) || '09:00'} />
+                        <DetailBox icon={DollarSign} label="MONTHLY SALARY" value={`Rs ${user?.salary || '0'}`} />
+                        <DetailBox icon={Briefcase} label="DESIGNATION" value={user?.position?.toUpperCase() || 'ASSOCIATE'} />
+                        <DetailBox icon={User} label="JOB TITLE" value={user?.department?.toUpperCase() || 'OPERATIONS'} />
+                        <DetailBox icon={Clock} label="TIMING PROTOCOL" value={`${formatTime(user?.entry_time)} - ${formatTime(user?.exit_time)}`} />
                         <DetailBox icon={Coffee} label="BREAK WINDOW" value={`${formatTime(user?.break_in)} - ${formatTime(user?.break_off)}`} />
-                        <DetailBox icon={LogOut} label="EXIT PROTOCOL" value={formatTime(user?.exit_time) || '18:00'} />
+                        <DetailBox icon={Clock} label="ASSIGNED SHIFT" value={user?.shift?.toUpperCase() || 'DAY SHIFT'} />
                     </div>
                 </Card>
             </div>

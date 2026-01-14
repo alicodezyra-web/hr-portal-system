@@ -11,6 +11,8 @@ import {
   RefreshCcw,
   LogOut,
   Search,
+  Settings,
+  Clock as ClockIcon,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -26,7 +28,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const navItems = [
     { label: 'Today Summary', icon: <LayoutDashboard size={20} />, path: '/admin' },
     { label: 'Staff Registry', icon: <Users size={20} />, path: '/admin/employees' },
-    { label: 'Monthly Logs', icon: <RefreshCcw size={20} />, path: '/admin/logs' },
+    { label: 'Monthly Attendance', icon: <Calendar size={20} />, path: '/admin/logs' },
+    { label: 'Shift Policies', icon: <ClockIcon size={20} />, path: '/admin/shifts' },
   ];
 
   return (
@@ -90,20 +93,20 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="hidden sm:flex flex-col text-right">
+          <div className="flex items-center gap-3 sm:gap-6">
+            <div className="hidden xs:flex flex-col text-right">
               <p className="text-[12px] font-black text-black leading-none uppercase tracking-tighter">
-                {new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: false })} PKT
+                {new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: true })} PKT
               </p>
               <p className="text-[8px] text-zinc-400 font-black uppercase tracking-widest mt-1">Operational Clock</p>
             </div>
             <div className="h-8 w-px bg-zinc-100 hidden sm:block"></div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
               <div className="text-right hidden sm:block">
                 <p className="text-[10px] font-black text-black leading-none uppercase tracking-tighter">{user?.full_name || 'Master Admin'}</p>
                 <p className="text-[8px] text-zinc-400 font-black uppercase tracking-widest mt-1">{user?.role === 'admin' ? 'Super User' : 'Employee'}</p>
               </div>
-              <div className="w-10 h-10 lg:w-11 lg:h-11 rounded-full bg-black flex items-center justify-center font-black text-white text-xs shadow-xl shadow-zinc-200 shrink-0">
+              <div className="w-10 h-10 lg:w-11 lg:h-11 rounded-full bg-black flex items-center justify-center font-black text-white text-[10px] sm:text-xs shadow-xl shadow-zinc-200 shrink-0">
                 {user?.full_name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'MA'}
               </div>
             </div>
@@ -111,11 +114,34 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         </header>
 
         {/* Content */}
-        <main className="p-4 md:p-8 lg:p-12 animate-in fade-in slide-in-from-bottom-4 duration-700 overflow-x-hidden">
+        <main className="p-4 md:p-8 lg:p-12 animate-in fade-in slide-in-from-bottom-4 duration-700 overflow-x-hidden pb-24 lg:pb-12">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>
         </main>
+
+        {/* Mobile Bottom Navigation */}
+        <nav className="lg:hidden fixed bottom-6 left-4 right-4 bg-black/90 backdrop-blur-xl border border-white/10 h-20 rounded-3xl z-[60] px-4 flex items-center justify-around shadow-2xl">
+          {navItems.map((item) => (
+            <Link
+              key={item.path}
+              href={item.path}
+              className={`flex flex-col items-center justify-center gap-1.5 transition-all duration-300 px-3 ${pathname === item.path ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+            >
+              <div className={`transition-transform duration-300 ${pathname === item.path ? 'scale-110' : 'scale-100'}`}>
+                {React.cloneElement(item.icon as React.ReactElement, { size: 22 })}
+              </div>
+              <span className={`text-[8px] font-black uppercase tracking-widest ${pathname === item.path ? 'opacity-100' : 'opacity-60'}`}>{item.label.split(' ')[0]}</span>
+            </Link>
+          ))}
+          <button
+            onClick={signOut}
+            className="flex flex-col items-center justify-center gap-1.5 text-zinc-500 hover:text-rose-500 transition-all px-3"
+          >
+            <LogOut size={22} />
+            <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Exit</span>
+          </button>
+        </nav>
       </div>
     </div>
   );

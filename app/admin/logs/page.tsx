@@ -44,15 +44,20 @@ const Logs: React.FC = () => {
 
     const formatTime = (timeStr: any) => {
         if (!timeStr || timeStr === '-' || timeStr === 'NONE') return '-';
-        if (typeof timeStr === 'string' && timeStr.includes('T')) {
-            try {
+        try {
+            if (typeof timeStr === 'string' && timeStr.includes('T')) {
                 const date = new Date(timeStr);
-                if (isNaN(date.getTime())) return timeStr;
-                return date.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: false });
-            } catch (e) {
-                return timeStr;
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: true });
+                }
             }
-        }
+            if (typeof timeStr === 'string' && timeStr.includes(':')) {
+                const [h, m] = timeStr.split(':');
+                const date = new Date();
+                date.setHours(parseInt(h), parseInt(m));
+                return date.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', hour12: true });
+            }
+        } catch (e) { }
         return timeStr;
     };
 
@@ -95,8 +100,8 @@ const Logs: React.FC = () => {
         <div className="space-y-8 pb-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-zinc-50/50 p-8 rounded-[3rem] border border-zinc-100">
                 <div>
-                    <h1 className="text-4xl font-black text-black tracking-tighter leading-none mb-2">Monthly Intelligence</h1>
-                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em]">Aggregated Workforce Performance Data</p>
+                    <h1 className="text-4xl font-black text-black tracking-tighter leading-none mb-2">Monthly Attendance</h1>
+                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em]">Archived Workforce Presence Intelligence</p>
                 </div>
                 <div className="flex flex-wrap gap-4 items-center">
                     <div className="flex bg-white rounded-2xl border border-zinc-200 p-1">
@@ -132,59 +137,123 @@ const Logs: React.FC = () => {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left whitespace-nowrap min-w-[1200px]">
-                        <thead className="bg-zinc-50/50">
-                            <tr>
-                                <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Agent</th>
-                                <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Summary (P|L|A|V)</th>
-                                <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Protocol Timings</th>
-                                <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Expected Break</th>
-                                <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Details</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                            {userSummary.map((user) => (
-                                <tr key={user._id} className="hover:bg-zinc-50/30 transition-colors group">
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-black text-xs shadow-sm">
-                                                {user.full_name?.[0]}
-                                            </div>
-                                            <div>
-                                                <p className="font-black text-black tracking-tight leading-none mb-1 text-sm uppercase">{user.full_name}</p>
-                                                <p className="text-[9px] text-zinc-400 font-black tracking-widest uppercase">{user.position}</p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6 text-center">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <Badge variant="emerald">{user.present}P</Badge>
-                                            <Badge variant="amber">{user.late}L</Badge>
-                                            <Badge variant="rose">{user.absent}A</Badge>
-                                            <Badge variant="indigo">{user.leave}V</Badge>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6 text-center">
-                                        <p className="font-black text-black text-xs uppercase tracking-tighter">
-                                            {formatTime(user.entry_time)} - {formatTime(user.exit_time)}
-                                        </p>
-                                        <p className="text-[8px] text-zinc-400 font-black uppercase tracking-widest">{user.shift}</p>
-                                    </td>
-                                    <td className="px-8 py-6 text-center">
-                                        <p className="text-[10px] font-black text-zinc-500">
-                                            {formatTime(user.break_in)} - {formatTime(user.break_off)}
-                                        </p>
-                                    </td>
-                                    <td className="px-8 py-6 text-center">
-                                        <div className="flex flex-col gap-1 items-center">
-                                            <Badge variant="slate">PKR {user.salary}K</Badge>
-                                            <span className="text-[8px] font-black text-zinc-300 uppercase">{user.phone}</span>
-                                        </div>
-                                    </td>
+                    {/* Desktop View Table */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-left whitespace-nowrap mb-4">
+                            <thead className="bg-zinc-50/50">
+                                <tr>
+                                    <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Agent</th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Summary (P|L|A|V)</th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Protocol Timings</th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Expected Break</th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Details</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100">
+                                {userSummary.map((user) => (
+                                    <tr key={user._id} className="hover:bg-zinc-50/30 transition-colors group">
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-black text-xs shadow-sm">
+                                                    {user.full_name?.[0]}
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-black tracking-tight leading-none mb-1 text-sm uppercase">{user.full_name}</p>
+                                                    <p className="text-[9px] text-zinc-400 font-black tracking-widest uppercase">{user.position || 'RESOURCE'}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6 text-center">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <Badge variant="emerald">{user.present}P</Badge>
+                                                <Badge variant="amber">{user.late}L</Badge>
+                                                <Badge variant="rose">{user.absent}A</Badge>
+                                                <Badge variant="indigo">{user.leave}V</Badge>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6 text-center">
+                                            <p className="font-black text-black text-xs uppercase tracking-tighter">
+                                                {formatTime(user.entry_time)} - {formatTime(user.exit_time)}
+                                            </p>
+                                            <p className="text-[8px] text-zinc-400 font-black uppercase tracking-widest">{user.shift}</p>
+                                        </td>
+                                        <td className="px-8 py-6 text-center">
+                                            <p className="text-[10px] font-black text-zinc-500 uppercase tabular-nums tracking-widest">
+                                                {formatTime(user.break_in)} - {formatTime(user.break_off)}
+                                            </p>
+                                        </td>
+                                        <td className="px-8 py-6 text-center">
+                                            <div className="flex flex-col gap-1 items-center">
+                                                <Badge variant="black">Rs {user.salary}</Badge>
+                                                <span className="text-[8px] font-black text-zinc-300 uppercase">{user.phone || 'NO PHONE'}</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Mobile View Cards */}
+                    <div className="md:hidden divide-y divide-zinc-100">
+                        {userSummary.map((user) => (
+                            <div key={user._id} className="p-6 space-y-6 bg-white">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-black text-white rounded-2xl flex items-center justify-center font-black text-sm shadow-xl shadow-zinc-200">
+                                            {user.full_name?.[0]}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="font-black text-black text-[14px] uppercase tracking-tighter leading-none mb-1 truncate">{user.full_name}</p>
+                                            <p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest truncate">{user.position || 'RESOURCE'}</p>
+                                        </div>
+                                    </div>
+                                    <Badge variant="black">Rs {user.salary}</Badge>
+                                </div>
+
+                                <div className="flex items-center justify-between p-5 bg-zinc-50 rounded-[2rem] gap-2">
+                                    <div className="flex flex-col items-center gap-1">
+                                        <p className="text-[8px] font-black text-emerald-600 uppercase">Present</p>
+                                        <p className="text-xl font-black text-black">{user.present}</p>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-1">
+                                        <p className="text-[8px] font-black text-amber-600 uppercase">Late</p>
+                                        <p className="text-xl font-black text-black">{user.late}</p>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-1">
+                                        <p className="text-[8px] font-black text-rose-600 uppercase">Absent</p>
+                                        <p className="text-xl font-black text-black">{user.absent}</p>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-1">
+                                        <p className="text-[8px] font-black text-indigo-600 uppercase">Leave</p>
+                                        <p className="text-xl font-black text-black">{user.leave}</p>
+                                    </div>
+                                </div>
+
+                                <div className="p-5 border border-zinc-100 rounded-[2rem] space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Protocol Schedule</p>
+                                            <p className="text-[11px] font-black text-black">{formatTime(user.entry_time)} - {formatTime(user.exit_time)}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <Badge variant="slate">{user.shift?.split(' ')[0]}</Badge>
+                                        </div>
+                                    </div>
+                                    <div className="pt-4 border-t border-zinc-50 flex items-center justify-between">
+                                        <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Break Window</p>
+                                        <p className="text-[11px] font-black text-zinc-500 italic uppercase">{formatTime(user.break_in)} - {formatTime(user.break_off)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {userSummary.length === 0 && (
+                        <div className="p-20 text-center">
+                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">No logs found for this period</p>
+                        </div>
+                    )}
                 </div>
             </Card>
         </div>
