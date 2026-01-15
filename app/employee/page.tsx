@@ -20,6 +20,7 @@ const EmployeeDashboard: React.FC = () => {
     const [showScanner, setShowScanner] = useState(false);
     const [monthlyStats, setMonthlyStats] = useState({
         present: 0,
+        absent: 0,
         late: 0,
         leave: 0,
         formal: 0,
@@ -50,10 +51,28 @@ const EmployeeDashboard: React.FC = () => {
                     return !isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
                 });
 
+                const present = monthAttendance.filter((a: any) => a.status === 'present').length;
+                const late = monthAttendance.filter((a: any) => a.status === 'late').length;
+                const leave = monthAttendance.filter((a: any) => a.status === 'leave').length;
+                
+                // Calculate working days in current month (excluding weekends)
+                const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+                let workingDays = 0;
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(currentYear, currentMonth, day);
+                    const dayOfWeek = date.getDay();
+                    // Count Monday-Friday as working days (1-5)
+                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                        workingDays++;
+                    }
+                }
+                const absent = Math.max(0, workingDays - (present + late + leave));
+
                 setMonthlyStats({
-                    present: monthAttendance.filter((a: any) => a.status === 'present').length,
-                    late: monthAttendance.filter((a: any) => a.status === 'late').length,
-                    leave: monthAttendance.filter((a: any) => a.status === 'leave').length,
+                    present,
+                    absent,
+                    late,
+                    leave,
                     formal: monthAttendance.filter((a: any) => (a.dressing || 'none') === 'formal').length,
                     casual: monthAttendance.filter((a: any) => (a.dressing || 'none') === 'casual').length,
                     none: monthAttendance.filter((a: any) => (a.dressing || 'none') === 'none').length,
@@ -209,30 +228,26 @@ const EmployeeDashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card className="p-6 text-center border-zinc-100 shadow-sm">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">This Month Present</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Present Days</p>
                     <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.present}</p>
                 </Card>
                 <Card className="p-6 text-center border-zinc-100 shadow-sm">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">This Month Late</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Absent Days</p>
+                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.absent}</p>
+                </Card>
+                <Card className="p-6 text-center border-zinc-100 shadow-sm">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Late Count</p>
                     <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.late}</p>
                 </Card>
                 <Card className="p-6 text-center border-zinc-100 shadow-sm">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">This Month Leave</p>
-                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.leave}</p>
-                </Card>
-                <Card className="p-6 text-center border-zinc-100 shadow-sm">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Formal</p>
-                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.formal}</p>
-                </Card>
-                <Card className="p-6 text-center border-zinc-100 shadow-sm">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Casual</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Casual Days</p>
                     <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.casual}</p>
                 </Card>
                 <Card className="p-6 text-center border-zinc-100 shadow-sm">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Unmarked</p>
-                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.none}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Formal Days</p>
+                    <p className="text-3xl font-black tracking-tighter text-black">{monthlyStats.formal}</p>
                 </Card>
             </div>
 

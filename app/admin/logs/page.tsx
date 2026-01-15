@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Calendar, Filter, Loader2, RefreshCcw, Info, Camera, CheckCircle2, Shirt } from 'lucide-react';
+import { Search, Download, Calendar, Filter, Loader2, RefreshCcw, Info, Camera, CheckCircle2, Shirt, FileText } from 'lucide-react';
 import { Card, Badge, PrimaryButton } from '@/components/SharedUI';
 import { toast } from 'react-toastify';
 
@@ -105,13 +105,35 @@ const Logs: React.FC = () => {
     });
 
     // Aggregate data per user
-    const userSummary = users.map(user => {
+    const userSummaryUnfiltered = users.map(user => {
         const userLogs = monthlyLogs.filter(log => log.user?._id === user._id || log.user === user._id);
         const present = userLogs.filter(l => l.status === 'present').length;
         const late = userLogs.filter(l => l.status === 'late').length;
         const leave = userLogs.filter(l => l.status === 'leave').length;
+        const formal = userLogs.filter(l => (l.dressing || 'none') === 'formal').length;
+        const casual = userLogs.filter(l => (l.dressing || 'none') === 'casual').length;
+        
         // Absent logic: For 'today', if no log found, they are absent.
-        const absent = dateFilter === 'today' ? (userLogs.length === 0 ? 1 : 0) : (26 - (present + late + leave));
+        // For monthly: calculate working days in month (excluding weekends, approximately 22-26 days)
+        let absent = 0;
+        if (dateFilter === 'today') {
+            absent = userLogs.length === 0 ? 1 : 0;
+        } else {
+            // Calculate working days in the selected month (excluding weekends)
+            const year = selectedYear;
+            const month = selectedMonth;
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            let workingDays = 0;
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dayOfWeek = date.getDay();
+                // Count Monday-Friday as working days (1-5)
+                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                    workingDays++;
+                }
+            }
+            absent = Math.max(0, workingDays - (present + late + leave));
+        }
 
         const todayLog = dateFilter === 'today' ? userLogs[0] : null;
 
@@ -120,19 +142,12 @@ const Logs: React.FC = () => {
             present,
             late,
             leave,
-            absent: absent > 0 ? absent : 0,
+            absent,
+            formal,
+            casual,
             logs: userLogs,
             todayLog
         };
-    }).filter(u => {
-        const matchesSearch = u.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
-
-        // NEW REQUIREMENT: In 'today' view, ONLY show users who have a log (scanned).
-        if (dateFilter === 'today') {
-            return matchesSearch && u.logs.length > 0;
-        }
-
-        return matchesSearch;
     });
 
     // Overall monthly summary across all employees (for Monthly view)
@@ -143,7 +158,8 @@ const Logs: React.FC = () => {
         const totalPresent = monthlyLogs.filter((l) => l.status === 'present').length;
         const totalLate = monthlyLogs.filter((l) => l.status === 'late').length;
         const totalLeave = monthlyLogs.filter((l) => l.status === 'leave').length;
-        const totalAbsent = monthlyLogs.filter((l) => l.status === 'absent').length;
+        // Calculate total absent days: sum of absent days for all users (before filtering)
+        const totalAbsent = userSummaryUnfiltered.reduce((sum, user) => sum + user.absent, 0);
         const totalFormal = monthlyLogs.filter((l) => (l.dressing || 'none') === 'formal').length;
         const totalCasual = monthlyLogs.filter((l) => (l.dressing || 'none') === 'casual').length;
         const totalNone = monthlyLogs.filter((l) => (l.dressing || 'none') === 'none').length;
@@ -157,6 +173,18 @@ const Logs: React.FC = () => {
             none: totalNone,
         };
     })();
+
+    // Filter userSummary for display
+    const userSummary = userSummaryUnfiltered.filter(u => {
+        const matchesSearch = u.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
+
+        // NEW REQUIREMENT: In 'today' view, ONLY show users who have a log (scanned).
+        if (dateFilter === 'today') {
+            return matchesSearch && u.logs.length > 0;
+        }
+
+        return matchesSearch;
+    });
 
     // Sort: For today, show those with activity (logs) first
     if (dateFilter === 'today') {
@@ -220,28 +248,162 @@ const Logs: React.FC = () => {
             </div>
 
             {dateFilter === 'all' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card className="p-6 border-zinc-100 shadow-sm">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Monthly Present</p>
-                        <p className="text-3xl font-black tracking-tighter text-black">{monthlyTotals.present}</p>
+                <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                        <Card className="p-8 border-zinc-100 shadow-sm">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Present Days</p>
+                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.present}</p>
+                        </Card>
+                        <Card className="p-8 border-zinc-100 shadow-sm">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Absent Days</p>
+                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.absent}</p>
+                        </Card>
+                        <Card className="p-8 border-zinc-100 shadow-sm">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Late Count</p>
+                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.late}</p>
+                        </Card>
+                        <Card className="p-8 border-zinc-100 shadow-sm">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Casual Days</p>
+                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.casual}</p>
+                        </Card>
+                        <Card className="p-8 border-zinc-100 shadow-sm">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Formal Days</p>
+                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.formal}</p>
+                        </Card>
+                    </div>
+
+                    <Card className="!p-0 overflow-hidden shadow-2xl border border-zinc-100">
+                        <div className="p-8 border-b border-zinc-100 flex flex-wrap items-center justify-between gap-6 bg-zinc-50/20">
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center">
+                                    <FileText size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg sm:text-xl font-black text-black tracking-tight leading-none mb-1">Monthly Attendance Register</h3>
+                                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Individual Employee Records - {months[selectedMonth]} {selectedYear}</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="relative max-w-xs w-full">
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={18} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search employees..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full pl-12 pr-4 py-4 bg-white border border-zinc-100 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-black transition-all"
+                                    />
+                                </div>
+                                <button onClick={fetchData} className="p-4 bg-white border border-zinc-100 rounded-2xl hover:text-black transition-all"><RefreshCcw size={18} /></button>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            {/* Desktop View Table */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full text-left whitespace-nowrap">
+                                    <thead className="bg-zinc-50 border-y border-zinc-100">
+                                        <tr>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Employee Name</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Present</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Absent</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Late</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Formal</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Casual</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Department</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-100">
+                                        {userSummary.map((user) => (
+                                            <tr key={user._id} className="hover:bg-zinc-50/50 transition-colors">
+                                                <td className="px-6 py-6">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center font-black text-xs">
+                                                            {user.full_name?.[0]}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-black text-black text-sm uppercase tracking-tight leading-none mb-1">{user.full_name}</p>
+                                                            <p className="text-[9px] text-zinc-400 font-black tracking-widest uppercase">{user.position || 'RESOURCE'}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-lg font-black text-emerald-600">{user.present}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-lg font-black text-rose-600">{user.absent}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-lg font-black text-amber-600">{user.late}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-lg font-black text-black">{user.formal || 0}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-lg font-black text-black">{user.casual || 0}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">{user.department || 'N/A'}</span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile View Cards */}
+                            <div className="md:hidden divide-y divide-zinc-100">
+                                {userSummary.map((user) => (
+                                    <div key={user._id} className="p-6 space-y-4 bg-white">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 bg-black text-white rounded-2xl flex items-center justify-center font-black text-sm">
+                                                    {user.full_name?.[0]}
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-black text-[14px] uppercase tracking-tight leading-none mb-1">{user.full_name}</p>
+                                                    <p className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">{user.department || 'N/A'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="p-4 bg-emerald-50 rounded-2xl text-center">
+                                                <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Present</p>
+                                                <p className="text-2xl font-black text-emerald-600">{user.present}</p>
+                                            </div>
+                                            <div className="p-4 bg-rose-50 rounded-2xl text-center">
+                                                <p className="text-[8px] font-black text-rose-600 uppercase tracking-widest mb-1">Absent</p>
+                                                <p className="text-2xl font-black text-rose-600">{user.absent}</p>
+                                            </div>
+                                            <div className="p-4 bg-amber-50 rounded-2xl text-center">
+                                                <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Late</p>
+                                                <p className="text-2xl font-black text-amber-600">{user.late}</p>
+                                            </div>
+                                            <div className="p-4 bg-zinc-50 rounded-2xl text-center">
+                                                <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Formal</p>
+                                                <p className="text-2xl font-black text-black">{user.formal || 0}</p>
+                                            </div>
+                                            <div className="p-4 bg-zinc-50 rounded-2xl text-center">
+                                                <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Casual</p>
+                                                <p className="text-2xl font-black text-black">{user.casual || 0}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {userSummary.length === 0 && (
+                                <div className="p-20 text-center">
+                                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">No records found for this month</p>
+                                </div>
+                            )}
+                        </div>
                     </Card>
-                    <Card className="p-6 border-zinc-100 shadow-sm">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Monthly Late</p>
-                        <p className="text-3xl font-black tracking-tighter text-black">{monthlyTotals.late}</p>
-                    </Card>
-                    <Card className="p-6 border-zinc-100 shadow-sm">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Monthly Leave</p>
-                        <p className="text-3xl font-black tracking-tighter text-black">{monthlyTotals.leave}</p>
-                    </Card>
-                    <Card className="p-6 border-zinc-100 shadow-sm">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2">Monthly Dressing (F/C/N)</p>
-                        <p className="text-3xl font-black tracking-tighter text-black">
-                            {monthlyTotals.formal}/{monthlyTotals.casual}/{monthlyTotals.none}
-                        </p>
-                    </Card>
-                </div>
+                </>
             )}
 
+            {dateFilter === 'today' && (
             <Card className="!p-0 overflow-hidden shadow-2xl">
                 <div className="p-8 border-b border-zinc-100 flex flex-wrap items-center justify-between gap-6 bg-zinc-50/20">
                     <div className="relative max-w-xs w-full">
@@ -255,7 +417,7 @@ const Logs: React.FC = () => {
                         />
                     </div>
                     <div className="flex gap-2">
-                        <Badge variant="black">Month: {months[selectedMonth]} {selectedYear}</Badge>
+                        <Badge variant="black">Today</Badge>
                         <button onClick={fetchData} className="p-4 bg-white border border-zinc-100 rounded-2xl hover:text-black transition-all"><RefreshCcw size={18} /></button>
                     </div>
                 </div>
@@ -320,30 +482,28 @@ const Logs: React.FC = () => {
                                                             <span className="text-[10px] font-bold text-zinc-400">
                                                                 OUT: {user.todayLog.checkOut ? formatTime(user.todayLog.checkOut) : 'ACTIVE'}
                                                             </span>
-                                                            <div className="flex items-center gap-2 mt-2">
-                                                                <span className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">Dressing</span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDressingChange(user.todayLog._id, 'formal')}
-                                                                    disabled={updatingDressingId === user.todayLog._id}
-                                                                    className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${user.todayLog.dressing === 'formal'
-                                                                        ? 'border-black bg-black text-white'
-                                                                        : 'border-zinc-200 bg-white text-zinc-500'
-                                                                        }`}
-                                                                >
-                                                                    Formal
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDressingChange(user.todayLog._id, 'casual')}
-                                                                    disabled={updatingDressingId === user.todayLog._id}
-                                                                    className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${user.todayLog.dressing === 'casual'
-                                                                        ? 'border-black bg-black text-white'
-                                                                        : 'border-zinc-200 bg-white text-zinc-500'
-                                                                        }`}
-                                                                >
-                                                                    Casual
-                                                                </button>
+                                                            <div className="flex items-center gap-4 mt-3">
+                                                                <span className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">DRESSING:</span>
+                                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={user.todayLog.dressing === 'formal'}
+                                                                        onChange={() => handleDressingChange(user.todayLog._id, user.todayLog.dressing === 'formal' ? 'none' : 'formal')}
+                                                                        disabled={updatingDressingId === user.todayLog._id}
+                                                                        className="w-4 h-4 rounded border-2 border-zinc-300 text-black focus:ring-2 focus:ring-black focus:ring-offset-0 cursor-pointer disabled:opacity-50"
+                                                                    />
+                                                                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">FORMAL</span>
+                                                                </label>
+                                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={user.todayLog.dressing === 'casual'}
+                                                                        onChange={() => handleDressingChange(user.todayLog._id, user.todayLog.dressing === 'casual' ? 'none' : 'casual')}
+                                                                        disabled={updatingDressingId === user.todayLog._id}
+                                                                        className="w-4 h-4 rounded border-2 border-zinc-300 text-black focus:ring-2 focus:ring-black focus:ring-offset-0 cursor-pointer disabled:opacity-50"
+                                                                    />
+                                                                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">CASUAL</span>
+                                                                </label>
                                                             </div>
                                                         </>
                                                     ) : (
@@ -390,43 +550,103 @@ const Logs: React.FC = () => {
                                             <p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest truncate">{user.position || 'RESOURCE'}</p>
                                         </div>
                                     </div>
-                                    <Badge variant="black">Rs {user.salary}</Badge>
+                                    {dateFilter === 'today' ? (
+                                        user.todayLog ? (
+                                            <Badge variant={user.todayLog.status === 'late' ? 'amber' : 'emerald'}>
+                                                {user.todayLog.status.toUpperCase()}
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="rose">ABSENT</Badge>
+                                        )
+                                    ) : (
+                                        <Badge variant="black">Rs {user.salary}</Badge>
+                                    )}
                                 </div>
 
-                                <div className="flex items-center justify-between p-5 bg-zinc-50 rounded-[2rem] gap-2">
-                                    <div className="flex flex-col items-center gap-1">
-                                        <p className="text-[8px] font-black text-emerald-600 uppercase">Present</p>
-                                        <p className="text-xl font-black text-black">{user.present}</p>
-                                    </div>
-                                    <div className="flex flex-col items-center gap-1">
-                                        <p className="text-[8px] font-black text-amber-600 uppercase">Late</p>
-                                        <p className="text-xl font-black text-black">{user.late}</p>
-                                    </div>
-                                    <div className="flex flex-col items-center gap-1">
-                                        <p className="text-[8px] font-black text-rose-600 uppercase">Absent</p>
-                                        <p className="text-xl font-black text-black">{user.absent}</p>
-                                    </div>
-                                    <div className="flex flex-col items-center gap-1">
-                                        <p className="text-[8px] font-black text-indigo-600 uppercase">Leave</p>
-                                        <p className="text-xl font-black text-black">{user.leave}</p>
-                                    </div>
-                                </div>
+                                {dateFilter === 'today' ? (
+                                    <>
+                                        {user.todayLog ? (
+                                            <>
+                                                <div className="p-5 bg-zinc-50 rounded-[2rem] space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Time In</p>
+                                                        <p className="text-[11px] font-black text-black">{formatTime(user.todayLog.checkIn)}</p>
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Time Out</p>
+                                                        <p className="text-[11px] font-black text-black">{user.todayLog.checkOut ? formatTime(user.todayLog.checkOut) : 'ACTIVE'}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="p-5 border border-zinc-100 rounded-[2rem] space-y-3">
+                                                    <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest mb-2">DRESSING</p>
+                                                    <div className="flex items-center gap-4">
+                                                        <label className="flex items-center gap-2 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={user.todayLog.dressing === 'formal'}
+                                                                onChange={() => handleDressingChange(user.todayLog._id, user.todayLog.dressing === 'formal' ? 'none' : 'formal')}
+                                                                disabled={updatingDressingId === user.todayLog._id}
+                                                                className="w-5 h-5 rounded border-2 border-zinc-300 text-black focus:ring-2 focus:ring-black focus:ring-offset-0 cursor-pointer disabled:opacity-50"
+                                                            />
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">FORMAL</span>
+                                                        </label>
+                                                        <label className="flex items-center gap-2 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={user.todayLog.dressing === 'casual'}
+                                                                onChange={() => handleDressingChange(user.todayLog._id, user.todayLog.dressing === 'casual' ? 'none' : 'casual')}
+                                                                disabled={updatingDressingId === user.todayLog._id}
+                                                                className="w-5 h-5 rounded border-2 border-zinc-300 text-black focus:ring-2 focus:ring-black focus:ring-offset-0 cursor-pointer disabled:opacity-50"
+                                                            />
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">CASUAL</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="p-5 bg-zinc-50 rounded-[2rem] text-center">
+                                                <p className="text-[10px] font-black text-zinc-300 uppercase">No attendance record</p>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-between p-5 bg-zinc-50 rounded-[2rem] gap-2">
+                                            <div className="flex flex-col items-center gap-1">
+                                                <p className="text-[8px] font-black text-emerald-600 uppercase">Present</p>
+                                                <p className="text-xl font-black text-black">{user.present}</p>
+                                            </div>
+                                            <div className="flex flex-col items-center gap-1">
+                                                <p className="text-[8px] font-black text-amber-600 uppercase">Late</p>
+                                                <p className="text-xl font-black text-black">{user.late}</p>
+                                            </div>
+                                            <div className="flex flex-col items-center gap-1">
+                                                <p className="text-[8px] font-black text-rose-600 uppercase">Absent</p>
+                                                <p className="text-xl font-black text-black">{user.absent}</p>
+                                            </div>
+                                            <div className="flex flex-col items-center gap-1">
+                                                <p className="text-[8px] font-black text-indigo-600 uppercase">Leave</p>
+                                                <p className="text-xl font-black text-black">{user.leave}</p>
+                                            </div>
+                                        </div>
 
-                                <div className="p-5 border border-zinc-100 rounded-[2rem] space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-1">
-                                            <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Protocol Schedule</p>
-                                            <p className="text-[11px] font-black text-black">{formatTime(user.entry_time)} - {formatTime(user.exit_time)}</p>
+                                        <div className="p-5 border border-zinc-100 rounded-[2rem] space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Protocol Schedule</p>
+                                                    <p className="text-[11px] font-black text-black">{formatTime(user.entry_time)} - {formatTime(user.exit_time)}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <Badge variant="slate">{user.shift?.split(' ')[0]}</Badge>
+                                                </div>
+                                            </div>
+                                            <div className="pt-4 border-t border-zinc-50 flex items-center justify-between">
+                                                <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Break Window</p>
+                                                <p className="text-[11px] font-black text-zinc-500 italic uppercase">{formatTime(user.break_in)} - {formatTime(user.break_off)}</p>
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <Badge variant="slate">{user.shift?.split(' ')[0]}</Badge>
-                                        </div>
-                                    </div>
-                                    <div className="pt-4 border-t border-zinc-50 flex items-center justify-between">
-                                        <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Break Window</p>
-                                        <p className="text-[11px] font-black text-zinc-500 italic uppercase">{formatTime(user.break_in)} - {formatTime(user.break_off)}</p>
-                                    </div>
-                                </div>
+                                    </>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -438,6 +658,7 @@ const Logs: React.FC = () => {
                     )}
                 </div>
             </Card>
+            )}
         </div>
     );
 };

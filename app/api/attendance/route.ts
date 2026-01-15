@@ -50,13 +50,21 @@ export async function POST(request: Request) {
 
         await dbConnect();
         const body = await request.json();
-        const { action, note, dressing, attendanceId } = body; // action: 'checkin' | 'checkout' | 'set_dressing'
+        const { action, note, dressing, attendanceId, userId, manualTime } = body; // action: 'checkin' | 'checkout' | 'set_dressing' | 'admin_checkin' | 'admin_checkout'
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
+        // For admin actions, use the provided userId, otherwise use decoded.id
+        const targetUserId = (action === 'admin_checkin' || action === 'admin_checkout') ? userId : decoded.id;
+        
+        // Admin-only actions check
+        if ((action === 'admin_checkin' || action === 'admin_checkout') && decoded.role !== 'admin') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
         let attendance = await AttendanceModel.findOne({
-            user: decoded.id,
+            user: targetUserId,
             date: { $gte: today }
         });
 
@@ -143,6 +151,90 @@ export async function POST(request: Request) {
                 user.current_check_out = new Date();
                 await user.save();
             }
+        } else if (action === 'admin_checkin') {
+            // Admin-only: manually check-in an employee
+            if (decoded.role !== 'admin') {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
+
+            if (!userId) {
+                return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+            }
+
+            if (attendance) {
+                return NextResponse.json({ error: 'Employee already checked in today' }, { status: 400 });
+            }
+
+            // Get the target user
+            const targetUser = await import('@/models/User').then(m => m.default.findById(userId));
+            if (!targetUser) {
+                return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            }
+
+            // Use manualTime if provided, otherwise use current time
+            const checkInTime = manualTime ? new Date(manualTime) : new Date();
+            
+            // Determine status based on entry time and check-in time
+            let status: 'present' | 'late' = 'present';
+            const entryTimeStr = targetUser.entry_time || '09:00';
+            const [entryHour, entryMinute] = entryTimeStr.split(':').map(Number);
+            
+            // Create entry time on the same day as check-in
+            const entryTimeDate = new Date(checkInTime);
+            entryTimeDate.setHours(entryHour, entryMinute, 0, 0);
+            const graceTime = new Date(entryTimeDate.getTime() + 5 * 60000);
+
+            // Compare check-in time with grace time
+            if (checkInTime.getTime() > graceTime.getTime()) {
+                status = 'late';
+            }
+
+            attendance = await AttendanceModel.create({
+                user: userId,
+                date: new Date(),
+                checkIn: checkInTime,
+                status: status,
+                notes: note || 'Manually marked by admin',
+                dressing: 'none'
+            });
+
+            // Sync with User Document
+            targetUser.current_check_in = new Date();
+            targetUser.current_check_out = null;
+            targetUser.attendance_status = status;
+            await targetUser.save();
+
+        } else if (action === 'admin_checkout') {
+            // Admin-only: manually check-out an employee
+            if (decoded.role !== 'admin') {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
+
+            if (!userId) {
+                return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+            }
+
+            if (!attendance) {
+                return NextResponse.json({ error: 'No check-in found for today' }, { status: 400 });
+            }
+
+            if (attendance.checkOut) {
+                return NextResponse.json({ error: 'Already checked out today' }, { status: 400 });
+            }
+
+            // Use manualTime if provided, otherwise use current time
+            const checkOutTime = manualTime ? new Date(manualTime) : new Date();
+            attendance.checkOut = checkOutTime;
+            if (note) attendance.notes = note;
+            await attendance.save();
+
+            // Sync with User Document
+            const targetUser = await import('@/models/User').then(m => m.default.findById(userId));
+            if (targetUser) {
+                targetUser.current_check_out = new Date();
+                await targetUser.save();
+            }
+
         } else if (action === 'set_dressing') {
             // Admin-only: set or update dressing for a specific attendance record
             if (decoded.role !== 'admin') {

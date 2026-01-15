@@ -85,8 +85,10 @@ const History: React.FC = () => {
                 <div className="divide-y divide-zinc-100">
                     {records.map((record) => {
                         const dateParts = formatDate(record.date);
-                        const isLate = record.is_late;
-                        const isPresent = record.status === 'P' || record.status === 'L';
+                        const isLate = record.status === 'late';
+                        const isPresent = record.status === 'present' || record.status === 'late';
+                        const checkInTime = record.checkIn ? new Date(record.checkIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--:--';
+                        const checkOutTime = record.checkOut ? new Date(record.checkOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--:--';
                         return (
                             <div key={record._id} className="p-10 flex flex-col md:flex-row md:items-center justify-between hover:bg-zinc-50/50 transition-all cursor-pointer group gap-8">
                                 <div className="flex items-center gap-8">
@@ -96,13 +98,18 @@ const History: React.FC = () => {
                                     </div>
                                     <div>
                                         <p className="font-black text-black text-xl tracking-tighter uppercase leading-none mb-2">{dateParts.full}</p>
-                                        <div className="flex items-center gap-6">
+                                        <div className="flex items-center gap-6 flex-wrap">
                                             <div className="flex items-center gap-2 text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                                                <TrendingUp size={12} className="text-black" /> In: <span className="text-black">{formatTime(record.check_in)}</span>
+                                                <TrendingUp size={12} className="text-black" /> In: <span className="text-black">{checkInTime}</span>
                                             </div>
                                             <div className="flex items-center gap-2 text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                                                <TrendingUp size={12} className="text-zinc-400 rotate-180" /> Out: <span className="text-black">{formatTime(record.check_out)}</span>
+                                                <TrendingUp size={12} className="text-zinc-400 rotate-180" /> Out: <span className="text-black">{checkOutTime}</span>
                                             </div>
+                                            {record.dressing && record.dressing !== 'none' && (
+                                                <div className="flex items-center gap-2 text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                                                    <span className="text-black">Dressing: <span className="font-black">{record.dressing.toUpperCase()}</span></span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -125,3 +132,4 @@ const History: React.FC = () => {
 };
 
 export default History;
+
