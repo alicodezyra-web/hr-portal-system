@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Clock, Plus, Save, Trash2, Edit2, Loader2,
-    Coffee, Timer, CheckCircle2, XCircle, Search
+    Coffee, Timer, CheckCircle2, XCircle, Search, Calendar
 } from 'lucide-react';
 import { Card, Badge, PrimaryButton, Modal, Input, Select } from '@/components/SharedUI';
 import { toast } from 'react-toastify';
@@ -16,9 +16,10 @@ const ShiftManagement: React.FC = () => {
     const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [editingShift, setEditingShift] = useState<any>(null);
-    const [deploymentData, setDeploymentData] = useState({ agentId: '', shiftName: '' });
+    const [deploymentData, setDeploymentData] = useState({ agentIds: [] as string[], shiftName: '' });
     const [searchQuery, setSearchQuery] = useState('');
     const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
+    const [isAssigningMultiple, setIsAssigningMultiple] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -51,12 +52,16 @@ const ShiftManagement: React.FC = () => {
             break_start: '13:00',
             break_end: '14:00',
             break_duration: 60,
+            working_days: 'monday-saturday',
         });
         setIsModalOpen(true);
     };
 
     const handleEdit = (shift: any) => {
-        setEditingShift({ ...shift });
+        setEditingShift({ 
+            ...shift, 
+            working_days: shift.working_days || 'monday-saturday' 
+        });
         setIsModalOpen(true);
     };
 
@@ -78,15 +83,28 @@ const ShiftManagement: React.FC = () => {
         setIsSaving(true);
         const isNew = !editingShift._id;
         try {
+            // Ensure working_days is included in the payload
+            const workingDaysValue = editingShift.working_days || 'monday-saturday';
+            
+            const payload = isNew 
+                ? { ...editingShift, working_days: workingDaysValue }
+                : { id: editingShift._id, ...editingShift, working_days: workingDaysValue };
+            
+            // Debug: log the payload to verify working_days is included
+            console.log('Saving shift with working_days:', workingDaysValue, 'Full payload:', payload);
+            
             const res = await fetch('/api/shifts', {
                 method: isNew ? 'POST' : 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(isNew ? editingShift : { id: editingShift._id, ...editingShift })
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
+                const savedShift = await res.json();
+                console.log('Saved shift response:', savedShift);
                 toast.success(isNew ? "Shift Policy Created" : "Shift Policy Updated");
-                fetchData();
+                // Force refresh the data
+                await fetchData();
                 setIsModalOpen(false);
             } else {
                 const err = await res.json();
@@ -134,9 +152,70 @@ const ShiftManagement: React.FC = () => {
         }
     };
 
+    const handleAssignMultipleShifts = async () => {
+        if (deploymentData.agentIds.length === 0 || !deploymentData.shiftName) {
+            toast.error("Please select shift and at least one employee");
+            return;
+        }
+
+        const selectedShift = shifts.find(s => s.name === deploymentData.shiftName);
+        if (!selectedShift) {
+            toast.error("Selected shift not found");
+            return;
+        }
+
+        setIsAssigningMultiple(true);
+        try {
+            // Assign shift to all selected employees
+            const promises = deploymentData.agentIds.map(agentId =>
+                fetch('/api/users', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: agentId,
+                        updates: {
+                            shift: deploymentData.shiftName,
+                            entry_time: selectedShift.entry_time,
+                            exit_time: selectedShift.exit_time,
+                            break_in: selectedShift.break_start,
+                            break_off: selectedShift.break_end
+                        }
+                    })
+                })
+            );
+
+            const results = await Promise.all(promises);
+            const allSuccess = results.every(res => res.ok);
+
+            if (allSuccess) {
+                toast.success(`${deploymentData.agentIds.length} employees assigned to ${deploymentData.shiftName}`);
+                fetchData();
+                setIsDeployModalOpen(false);
+                setDeploymentData({ agentIds: [], shiftName: '' });
+            } else {
+                toast.error("Some assignments failed");
+            }
+        } catch (error) {
+            toast.error("System error");
+        } finally {
+            setIsAssigningMultiple(false);
+        }
+    };
+
     const handleOpenDeploy = () => {
-        setDeploymentData({ agentId: '', shiftName: shifts[0]?.name || '' });
+        setDeploymentData({ agentIds: [], shiftName: shifts[0]?.name || '' });
+        setSearchQuery('');
         setIsDeployModalOpen(true);
+    };
+
+    const toggleEmployeeSelection = (agentId: string) => {
+        setDeploymentData(prev => {
+            if (prev.agentIds.includes(agentId)) {
+                return { ...prev, agentIds: prev.agentIds.filter(id => id !== agentId) };
+            } else {
+                return { ...prev, agentIds: [...prev.agentIds, agentId] };
+            }
+        });
     };
 
     const formatTime = (time: string) => {
@@ -205,6 +284,42 @@ const ShiftManagement: React.FC = () => {
                                 </div>
                                 <Badge variant="black">{shift.break_duration} MINS</Badge>
                             </div>
+
+                            <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl">
+                                <div className="flex items-center gap-2">
+                                    <Calendar size={14} className="text-zinc-400" />
+                                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Working Days</span>
+                                </div>
+                                <Badge variant="emerald">
+                                    {(() => {
+                                        // Get the working_days value
+                                        const workingDays = shift.working_days;
+                                        
+                                        // Debug: log the value to see what we're getting
+                                        // console.log('Shift:', shift.name, 'working_days:', workingDays);
+                                        
+                                        if (!workingDays) {
+                                            return 'MON-SAT'; // Default
+                                        }
+                                        
+                                        // Normalize the value - handle both string and any case variations
+                                        const normalized = String(workingDays).toLowerCase().trim();
+                                        
+                                        // Check for monday-friday first
+                                        if (normalized === 'monday-friday' || normalized === 'mon-fri') {
+                                            return 'MON-FRI';
+                                        }
+                                        
+                                        // Check for monday-saturday
+                                        if (normalized === 'monday-saturday' || normalized === 'mon-sat') {
+                                            return 'MON-SAT';
+                                        }
+                                        
+                                        // Default to MON-SAT
+                                        return 'MON-SAT';
+                                    })()}
+                                </Badge>
+                            </div>
                         </div>
                     </Card>
                 ))}
@@ -261,6 +376,16 @@ const ShiftManagement: React.FC = () => {
                         required
                     />
 
+                    <Select
+                        label="Working Days"
+                        value={editingShift?.working_days || 'monday-saturday'}
+                        onChange={(e: any) => {
+                            const newValue = e.target.value;
+                            setEditingShift({ ...editingShift, working_days: newValue });
+                        }}
+                        options={['monday-saturday', 'monday-friday']}
+                    />
+
                     <div className="flex justify-end pt-4">
                         <PrimaryButton type="submit" icon={Save} disabled={isSaving} className="w-full sm:w-auto">
                             {isSaving ? 'Saving...' : 'Save Policy'}
@@ -294,7 +419,12 @@ const ShiftManagement: React.FC = () => {
                         </div>
 
                         <div className="space-y-4">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Step 2: Select Employee</h4>
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Step 2: Select Employees</h4>
+                                {deploymentData.agentIds.length > 0 && (
+                                    <Badge variant="black">{deploymentData.agentIds.length} Selected</Badge>
+                                )}
+                            </div>
                             <div className="relative group mb-4">
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={18} />
                                 <input
@@ -302,24 +432,28 @@ const ShiftManagement: React.FC = () => {
                                     placeholder="Find agent..."
                                     className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl text-[11px] font-black uppercase outline-none focus:border-black transition-all"
                                     onChange={(e) => setSearchQuery(e.target.value)}
+                                    value={searchQuery}
                                 />
                             </div>
                             <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                                 {agents.filter(a => a.full_name?.toLowerCase().includes(searchQuery.toLowerCase())).map(a => (
                                     <button
                                         key={a._id}
-                                        onClick={() => setDeploymentData({ ...deploymentData, agentId: a._id })}
-                                        className={`w-full text-left p-4 rounded-2xl border transition-all ${deploymentData.agentId === a._id ? 'border-black bg-zinc-900 text-white' : 'border-zinc-100 bg-white hover:bg-zinc-50'}`}
+                                        type="button"
+                                        onClick={() => toggleEmployeeSelection(a._id)}
+                                        className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${deploymentData.agentIds.includes(a._id) ? 'border-black bg-black text-white shadow-xl' : 'border-zinc-100 bg-white hover:border-zinc-300'}`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center font-black text-[10px] text-black">
+                                            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${deploymentData.agentIds.includes(a._id) ? 'border-white bg-white' : 'border-zinc-300 bg-transparent'}`}>
+                                                {deploymentData.agentIds.includes(a._id) && <CheckCircle2 size={14} className={deploymentData.agentIds.includes(a._id) ? 'text-black' : 'text-zinc-400'} />}
+                                            </div>
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] ${deploymentData.agentIds.includes(a._id) ? 'bg-white text-black' : 'bg-zinc-100 text-black'}`}>
                                                 {a.full_name?.[0]}
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <p className="font-black text-[11px] uppercase tracking-tight leading-none truncate">{a.full_name}</p>
-                                                <p className="text-[9px] font-bold text-zinc-400 mt-1 uppercase italic tracking-widest truncate">Currently: {a.shift || 'None'}</p>
+                                                <p className={`text-[9px] font-bold mt-1 uppercase italic tracking-widest truncate ${deploymentData.agentIds.includes(a._id) ? 'text-zinc-300' : 'text-zinc-400'}`}>Currently: {a.shift || 'None'}</p>
                                             </div>
-                                            {deploymentData.agentId === a._id && <CheckCircle2 size={16} className="ml-auto flex-shrink-0" />}
                                         </div>
                                     </button>
                                 ))}
@@ -330,11 +464,11 @@ const ShiftManagement: React.FC = () => {
                     <div className="flex justify-end pt-8 border-t border-zinc-100">
                         <PrimaryButton
                             icon={Save}
-                            disabled={!deploymentData.agentId || !deploymentData.shiftName || updatingAgentId !== null}
-                            onClick={() => handleAssignShift(deploymentData.agentId, deploymentData.shiftName)}
+                            disabled={deploymentData.agentIds.length === 0 || !deploymentData.shiftName || isAssigningMultiple}
+                            onClick={handleAssignMultipleShifts}
                             className="w-full sm:w-auto"
                         >
-                            {updatingAgentId ? 'Processing...' : 'Complete Assignment'}
+                            {isAssigningMultiple ? `Assigning ${deploymentData.agentIds.length} Employees...` : `Complete Assignment (${deploymentData.agentIds.length} Selected)`}
                         </PrimaryButton>
                     </div>
                 </div>

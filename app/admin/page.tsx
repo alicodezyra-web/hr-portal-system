@@ -62,13 +62,33 @@ const AdminDashboard: React.FC = () => {
                 const absents = monthlyAtt.filter((a: any) => a.status === 'absent').length;
                 const leaves = monthlyAtt.filter((a: any) => a.status === 'leave').length;
 
+                // Determine attendance status: if no check-in, check if 1 hour has passed since entry_time
+                let attendanceStatus = attToday?.status || 'A';
+                if (!attToday) {
+                    // No check-in yet - check if 1 hour has passed since entry time
+                    const entryTimeStr = u.entry_time || '09:00';
+                    const [entryHour, entryMinute] = entryTimeStr.split(':').map(Number);
+                    const entryTimeDate = new Date();
+                    entryTimeDate.setHours(entryHour, entryMinute, 0, 0);
+                    
+                    // Add 1 hour to entry time
+                    const oneHourAfterEntry = new Date(entryTimeDate.getTime() + 60 * 60000);
+                    const now = new Date();
+                    
+                    if (now < oneHourAfterEntry) {
+                        attendanceStatus = 'pending';
+                    } else {
+                        attendanceStatus = 'absent';
+                    }
+                }
+
                 return {
                     ...u,
                     check_in_raw: attToday?.checkIn,
                     check_in: attToday?.checkIn || '-',
                     check_out: attToday?.checkOut || '-',
                     dressing: attToday?.dressing || 'none',
-                    attendance_status: attToday?.status || 'A',
+                    attendance_status: attendanceStatus,
                     is_late_today: attToday?.status === 'late',
                     late_summary: `${lates} Late, ${absents} Absent`,
                     monthly_leaves: leaves,
@@ -415,6 +435,8 @@ const AdminDashboard: React.FC = () => {
                                                     </>
                                                 ) : emp.attendance_status === 'leave' ? (
                                                     <Badge variant="slate">LEAVE</Badge>
+                                                ) : emp.attendance_status === 'pending' ? (
+                                                    <Badge variant="amber">PENDING</Badge>
                                                 ) : (
                                                     <Badge variant="rose">ABSENT</Badge>
                                                 )}
@@ -457,6 +479,8 @@ const AdminDashboard: React.FC = () => {
                                             </>
                                         ) : emp.attendance_status === 'leave' ? (
                                             <Badge variant="slate">LEAVE</Badge>
+                                        ) : emp.attendance_status === 'pending' ? (
+                                            <Badge variant="amber">PENDING</Badge>
                                         ) : (
                                             <Badge variant="rose">ABSENT</Badge>
                                         )}

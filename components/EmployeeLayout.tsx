@@ -11,6 +11,7 @@ import {
   LogOut,
   Clock
 } from 'lucide-react';
+import { BreakNotificationCenter } from './BreakNotificationCenter';
 
 interface EmployeeLayoutProps {
   children: React.ReactNode;
@@ -77,15 +78,19 @@ const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({ children }) => {
         {/* Header Mobile Only */}
         <header className="lg:hidden h-20 bg-white/80 backdrop-blur-md border-b border-zinc-100 px-6 flex items-center justify-between sticky top-0 z-30">
           <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center text-white font-black text-xs">C</div>
-          <div className="w-10 h-10 bg-zinc-100 rounded-lg flex items-center justify-center text-black font-black text-[10px] uppercase">
-            {new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }).split(' ')[0]}
+          <div className="flex items-center gap-3">
+            <BreakNotificationCenter />
+            <div className="w-10 h-10 bg-zinc-100 rounded-lg flex items-center justify-center text-black font-black text-[10px] uppercase">
+              {new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }).split(' ')[0]}
+            </div>
           </div>
         </header>
 
         {/* Content */}
         <main className="p-4 md:p-8 lg:p-12 animate-in fade-in slide-in-from-bottom-4 duration-700 overflow-x-hidden">
           <div className="max-w-7xl mx-auto">
-            <div className="hidden lg:flex justify-end mb-8">
+            <div className="hidden lg:flex justify-end items-center gap-4 mb-8">
+              <BreakNotificationCenter />
               <div className="flex items-center gap-3 bg-zinc-50 px-6 py-3 rounded-2xl border border-zinc-100 shadow-sm">
                 <Clock size={16} className="text-zinc-400" />
                 <span className="text-[10px] font-black text-black uppercase tracking-[0.2em]">

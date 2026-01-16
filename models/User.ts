@@ -41,7 +41,7 @@ const UserSchema = new mongoose.Schema({
     break_off: { type: String, default: '14:00' },
     annual_leaves: {
         type: Number,
-        default: 20,
+        default: 12,
     },
     casual_leaves: {
         type: Number,

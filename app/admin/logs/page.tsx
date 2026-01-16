@@ -12,7 +12,7 @@ const Logs: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-    const [dateFilter, setDateFilter] = useState<'all' | 'today'>('today'); // Default to today
+    const [dateFilter, setDateFilter] = useState<'all' | 'today'>('all'); // Default to monthly
     const [updatingDressingId, setUpdatingDressingId] = useState<string | null>(null);
 
     const fetchData = async () => {
@@ -137,6 +137,43 @@ const Logs: React.FC = () => {
 
         const todayLog = dateFilter === 'today' ? userLogs[0] : null;
 
+        // Calculate salary breakdown (only for monthly view)
+        let totalSalary = 0;
+        let salaryCut = 0;
+        let finalSalary = 0;
+        let dailySalary = 0;
+        let cutDays = 0;
+
+        if (dateFilter === 'all') {
+            // Calculate working days in the selected month
+            const year = selectedYear;
+            const month = selectedMonth;
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            let workingDays = 0;
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dayOfWeek = date.getDay();
+                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                    workingDays++;
+                }
+            }
+
+            // Get total salary (convert string to number)
+            totalSalary = parseFloat(user.salary || '0') || 0;
+            
+            // Calculate daily salary
+            dailySalary = workingDays > 0 ? totalSalary / workingDays : 0;
+            
+            // Calculate cut days: absent + leave + (late / 3, rounded down)
+            cutDays = absent + leave + Math.floor(late / 3);
+            
+            // Calculate salary cut
+            salaryCut = cutDays * dailySalary;
+            
+            // Calculate final salary
+            finalSalary = Math.max(0, totalSalary - salaryCut);
+        }
+
         return {
             ...user,
             present,
@@ -146,7 +183,12 @@ const Logs: React.FC = () => {
             formal,
             casual,
             logs: userLogs,
-            todayLog
+            todayLog,
+            totalSalary,
+            salaryCut,
+            finalSalary,
+            dailySalary,
+            cutDays
         };
     });
 
@@ -249,29 +291,6 @@ const Logs: React.FC = () => {
 
             {dateFilter === 'all' && (
                 <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                        <Card className="p-8 border-zinc-100 shadow-sm">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Present Days</p>
-                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.present}</p>
-                        </Card>
-                        <Card className="p-8 border-zinc-100 shadow-sm">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Absent Days</p>
-                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.absent}</p>
-                        </Card>
-                        <Card className="p-8 border-zinc-100 shadow-sm">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Late Count</p>
-                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.late}</p>
-                        </Card>
-                        <Card className="p-8 border-zinc-100 shadow-sm">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Casual Days</p>
-                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.casual}</p>
-                        </Card>
-                        <Card className="p-8 border-zinc-100 shadow-sm">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Total Formal Days</p>
-                            <p className="text-4xl font-black tracking-tighter text-black">{monthlyTotals.formal}</p>
-                        </Card>
-                    </div>
-
                     <Card className="!p-0 overflow-hidden shadow-2xl border border-zinc-100">
                         <div className="p-8 border-b border-zinc-100 flex flex-wrap items-center justify-between gap-6 bg-zinc-50/20">
                             <div className="flex items-center gap-4">
@@ -307,10 +326,13 @@ const Logs: React.FC = () => {
                                             <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest">Employee Name</th>
                                             <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Present</th>
                                             <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Absent</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Leave</th>
                                             <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Late</th>
                                             <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Formal</th>
                                             <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Casual</th>
-                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Department</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Total Salary</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Salary Cut</th>
+                                            <th className="px-6 py-5 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Final Salary</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-100">
@@ -334,6 +356,9 @@ const Logs: React.FC = () => {
                                                     <span className="text-lg font-black text-rose-600">{user.absent}</span>
                                                 </td>
                                                 <td className="px-6 py-6 text-center">
+                                                    <span className="text-lg font-black text-indigo-600">{user.leave || 0}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
                                                     <span className="text-lg font-black text-amber-600">{user.late}</span>
                                                 </td>
                                                 <td className="px-6 py-6 text-center">
@@ -343,7 +368,16 @@ const Logs: React.FC = () => {
                                                     <span className="text-lg font-black text-black">{user.casual || 0}</span>
                                                 </td>
                                                 <td className="px-6 py-6 text-center">
-                                                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">{user.department || 'N/A'}</span>
+                                                    <span className="text-sm font-black text-emerald-600">Rs {user.totalSalary?.toLocaleString('en-PK') || '0'}</span>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <span className="text-sm font-black text-rose-600">Rs {Math.round(user.salaryCut || 0).toLocaleString('en-PK')}</span>
+                                                        <span className="text-[8px] font-black text-zinc-400 uppercase">({user.cutDays || 0} days)</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-6 text-center">
+                                                    <span className="text-sm font-black text-black">Rs {Math.round(user.finalSalary || 0).toLocaleString('en-PK')}</span>
                                                 </td>
                                             </tr>
                                         ))}
@@ -362,7 +396,7 @@ const Logs: React.FC = () => {
                                                 </div>
                                                 <div>
                                                     <p className="font-black text-black text-[14px] uppercase tracking-tight leading-none mb-1">{user.full_name}</p>
-                                                    <p className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">{user.department || 'N/A'}</p>
+                                                    <p className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">{user.position || 'RESOURCE'}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -376,6 +410,10 @@ const Logs: React.FC = () => {
                                                 <p className="text-[8px] font-black text-rose-600 uppercase tracking-widest mb-1">Absent</p>
                                                 <p className="text-2xl font-black text-rose-600">{user.absent}</p>
                                             </div>
+                                            <div className="p-4 bg-indigo-50 rounded-2xl text-center">
+                                                <p className="text-[8px] font-black text-indigo-600 uppercase tracking-widest mb-1">Leave</p>
+                                                <p className="text-2xl font-black text-indigo-600">{user.leave || 0}</p>
+                                            </div>
                                             <div className="p-4 bg-amber-50 rounded-2xl text-center">
                                                 <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Late</p>
                                                 <p className="text-2xl font-black text-amber-600">{user.late}</p>
@@ -387,6 +425,25 @@ const Logs: React.FC = () => {
                                             <div className="p-4 bg-zinc-50 rounded-2xl text-center">
                                                 <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Casual</p>
                                                 <p className="text-2xl font-black text-black">{user.casual || 0}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 border-2 border-zinc-100 rounded-2xl space-y-3">
+                                            <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest mb-2">Salary Breakdown</p>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] font-black text-zinc-500 uppercase">Total Salary</span>
+                                                <span className="text-sm font-black text-emerald-600">Rs {user.totalSalary?.toLocaleString('en-PK') || '0'}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] font-black text-zinc-500 uppercase">Salary Cut</span>
+                                                <div className="text-right">
+                                                    <span className="text-sm font-black text-rose-600">Rs {Math.round(user.salaryCut || 0).toLocaleString('en-PK')}</span>
+                                                    <p className="text-[7px] font-black text-zinc-400 uppercase">({user.cutDays || 0} days: {user.absent} absent + {user.leave || 0} leave + {Math.floor(user.late / 3)} late)</p>
+                                                </div>
+                                            </div>
+                                            <div className="pt-2 border-t border-zinc-100 flex items-center justify-between">
+                                                <span className="text-[10px] font-black text-black uppercase">Final Salary</span>
+                                                <span className="text-base font-black text-black">Rs {Math.round(user.finalSalary || 0).toLocaleString('en-PK')}</span>
                                             </div>
                                         </div>
                                     </div>

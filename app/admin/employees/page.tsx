@@ -49,7 +49,7 @@ const Employees: React.FC = () => {
     const handleAddNew = () => {
         setEditingProfile({
             full_name: '',
-            employee_id: '',
+            employee_id: '', // Will be auto-generated on server
             email: '',
             password: 'Employee123!', // Default password
             role: 'employee',
@@ -59,7 +59,8 @@ const Employees: React.FC = () => {
             salary: '50000',
             entry_time: '09:00',
             exit_time: '18:00',
-            annual_leaves: 20,
+            annual_leaves: 12, // 1 leave per month = 12 per year
+            casual_leaves: 12,
             phone: '', // Mobile (Optional)
         });
         setIsModalOpen(true);
@@ -92,8 +93,11 @@ const Employees: React.FC = () => {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Mandatory field validation
-        const mandatoryFields = ['full_name', 'employee_id', 'salary', 'position', 'department', 'shift', 'entry_time', 'exit_time', 'annual_leaves'];
+        // Mandatory field validation (employee_id not required for new employees - will be auto-generated)
+        const isNew = !editingProfile._id;
+        const mandatoryFields = isNew 
+            ? ['full_name', 'salary', 'position', 'department', 'shift', 'entry_time', 'exit_time', 'annual_leaves']
+            : ['full_name', 'employee_id', 'salary', 'position', 'department', 'shift', 'entry_time', 'exit_time', 'annual_leaves'];
         const missing = mandatoryFields.filter(f => !editingProfile[f]);
         if (missing.length > 0) {
             toast.error(`Required: ${missing.join(', ')}`);
@@ -104,10 +108,11 @@ const Employees: React.FC = () => {
         if (editingProfile) {
             const isNew = !editingProfile._id;
             try {
-                const res = await fetch('/api/users', {
-                    method: isNew ? 'POST' : 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(isNew ? editingProfile : {
+                // For new employees, don't send employee_id (will be auto-generated)
+                const { employee_id, ...newEmployeeData } = editingProfile;
+                const payload = isNew 
+                    ? { ...newEmployeeData, annual_leaves: editingProfile.annual_leaves || 12, casual_leaves: editingProfile.casual_leaves || 12 }
+                    : {
                         userId: editingProfile._id,
                         updates: {
                             full_name: editingProfile.full_name,
@@ -122,8 +127,14 @@ const Employees: React.FC = () => {
                             entry_time: editingProfile.entry_time,
                             exit_time: editingProfile.exit_time,
                             annual_leaves: editingProfile.annual_leaves,
+                            casual_leaves: editingProfile.casual_leaves || 12,
                         }
-                    })
+                    };
+
+                const res = await fetch('/api/users', {
+                    method: isNew ? 'POST' : 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
 
                 if (res.ok) {
@@ -351,7 +362,15 @@ const Employees: React.FC = () => {
                 <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
                     <div className="space-y-6">
                         <Input label="Employee Full Name" value={editingProfile?.full_name || ""} onChange={(e: any) => handleChange("full_name", e.target.value)} icon={User} required />
-                        <Input label="Employee ID (Unique)" value={editingProfile?.employee_id || ""} onChange={(e: any) => handleChange("employee_id", e.target.value)} icon={CreditCard} required />
+                        <Input 
+                            label="Employee ID (Unique)" 
+                            value={editingProfile?.employee_id || ""} 
+                            onChange={(e: any) => handleChange("employee_id", e.target.value)} 
+                            icon={CreditCard} 
+                            required={!!editingProfile?._id}
+                            disabled={!editingProfile?._id}
+                            placeholder={!editingProfile?._id ? "Will be auto-generated" : ""}
+                        />
                         <Input label="Email Address" type="email" value={editingProfile?.email || ""} onChange={(e: any) => handleChange("email", e.target.value)} icon={Mail} required />
                         {!editingProfile?._id && (
                             <Input label="System Password" type="password" value={editingProfile?.password || ""} onChange={(e: any) => handleChange("password", e.target.value)} icon={Clock} required />
@@ -362,7 +381,7 @@ const Employees: React.FC = () => {
                         <Input label="Official Position" value={editingProfile?.position || ""} onChange={(e: any) => handleChange("position", e.target.value)} icon={Briefcase} required />
                         <Input label="Job Title / Dept" value={editingProfile?.department || ""} onChange={(e: any) => handleChange("department", e.target.value)} icon={Briefcase} required />
                         <Input label="Monthly Salary (PKR)" value={editingProfile?.salary || ""} onChange={(e: any) => handleChange("salary", e.target.value)} icon={DollarSign} required />
-                        <Input label="Annual Leave Balance" type="number" value={editingProfile?.annual_leaves || 20} onChange={(e: any) => handleChange("annual_leaves", parseInt(e.target.value))} icon={Calendar} required />
+                        <Input label="Annual Leave Balance" type="number" value={editingProfile?.annual_leaves || 12} onChange={(e: any) => handleChange("annual_leaves", parseInt(e.target.value))} icon={Calendar} required />
                     </div>
 
                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-zinc-100">

@@ -30,6 +30,11 @@ const ShiftSchema = new mongoose.Schema({
         type: Number,
         default: 60, // in minutes
     },
+    working_days: {
+        type: String,
+        enum: ['monday-saturday', 'monday-friday'],
+        default: 'monday-saturday',
+    },
     status: {
         type: String,
         enum: ['active', 'inactive'],

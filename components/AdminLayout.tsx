@@ -14,6 +14,7 @@ import {
   Settings,
   Clock as ClockIcon,
 } from 'lucide-react';
+import { BreakNotificationCenter } from './BreakNotificationCenter';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -102,6 +103,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             </div>
             <div className="h-8 w-px bg-zinc-100 hidden sm:block"></div>
             <div className="flex items-center gap-3 sm:gap-4">
+              <BreakNotificationCenter />
               <div className="text-right hidden sm:block">
                 <p className="text-[10px] font-black text-black leading-none uppercase tracking-tighter">{user?.full_name || 'Master Admin'}</p>
                 <p className="text-[8px] text-zinc-400 font-black uppercase tracking-widest mt-1">{user?.role === 'admin' ? 'Super User' : 'Employee'}</p>

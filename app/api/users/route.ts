@@ -46,12 +46,36 @@ export async function POST(request: Request) {
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
+        const finalRole = role || 'employee';
+
+        // Auto-generate employee ID for employees
+        let generatedEmployeeId = '';
+        if (finalRole === 'employee') {
+            // Find the highest existing employee_id number
+            const existingEmployees = await User.find({ 
+                employee_id: { $regex: /^EMP\d+$/ } 
+            }).sort({ employee_id: -1 }).limit(1);
+            
+            if (existingEmployees.length > 0 && existingEmployees[0].employee_id) {
+                // Extract number from last employee_id (e.g., EMP01 -> 1)
+                const lastId = existingEmployees[0].employee_id;
+                const lastNumber = parseInt(lastId.replace('EMP', '')) || 0;
+                const nextNumber = lastNumber + 1;
+                generatedEmployeeId = `EMP${nextNumber.toString().padStart(2, '0')}`;
+            } else {
+                // First employee
+                generatedEmployeeId = 'EMP01';
+            }
+        }
 
         const newUser = await User.create({
             email: email.toLowerCase(),
             password: hashedPassword,
             full_name,
-            role: role || 'employee',
+            role: finalRole,
+            employee_id: finalRole === 'employee' ? (rest.employee_id || generatedEmployeeId) : '',
+            annual_leaves: finalRole === 'employee' ? (rest.annual_leaves || 12) : (rest.annual_leaves || 0),
+            casual_leaves: finalRole === 'employee' ? (rest.casual_leaves || 12) : (rest.casual_leaves || 0),
             ...rest
         });
 
